@@ -5,25 +5,18 @@
 #include "qcir_keywords.hpp"
 #include "circuit.hpp"
 
-namespace qser {
+namespace preproq::qcir {
 
     using VarId = unsigned;
     using Literal = int;
        
-    #define PREFIX "[" << target << ":" << line << ":" << col <<"]"
-
-    enum QType {
-        Free = 2,
-        Exists = 3,
-        Forall = 4
-    };
-
+    #define PREFIX "[QCIR at " << target << ":" << line << ":" << col <<"] "
     #define QCIR_KEYWORD_OUTPUT 5
 
     class QcirSerializer {
         std::istream& input;        
         std::string target;
-        Circuit circ;
+        Circuit& circ;
 
         size_t line = 1;
         size_t col = 0;
@@ -33,6 +26,7 @@ namespace qser {
 
         std::string buffer;
         std::string output;
+        bool outputPhase = true;
 
         std::map<std::string, VarId> mapper;
 
@@ -53,7 +47,7 @@ namespace qser {
                 return true;
             }
             else{
-                PERR("Expected " << c << " but got " << cur);
+                PERR("Expected " << c << " but got " << (char)cur << " (" << cur << ")");
                 return false;
             }
         }
@@ -94,6 +88,7 @@ namespace qser {
             buffer.clear();
             while(inVar()) {
                 buffer += cur;
+                next();
             }        
         }
 
@@ -102,21 +97,16 @@ namespace qser {
             return ptr != 0 ? ptr->id : 0;
         }
 
-        inline void writeBqcir(BqcirElem elem) {
-            assert(consumer != nullptr);
-            (*consumer)(elem);
-        }
-
-
         inline VarId registerVar()  {
             VarId vid = nextId++;
             mapper[buffer] = vid;
-            PDBG("Translation " << buffer << " -> " << nextId);
+            PDBG("Translation " << buffer << " -> " << vid);
+            return vid;
         }
 
 
     public:
-        QcirSerializer(std::istream& input, std::string target, bqcirConsumer* consumer) : input(input), target(target), consumer(consumer) { 
+        QcirSerializer(std::istream& input, Circuit& circuit, std::string target = "<internal>") : input(input), target(target), circ(circuit) { 
             next();
         }
         
@@ -130,7 +120,7 @@ namespace qser {
                !check('I') ||
                !check('R') ||
                !check('-'))
-               return QSER_ERROR;
+               return PREPROQ_ERROR;
 
             //QCIR-G, expecting values
             bool gVersion = cur == 'G';
@@ -147,26 +137,25 @@ namespace qser {
                 PINF("Expecting " << expected << " Variables");
             }
 
-            writeBqcir(BQCIR_V1);
             whitespace();
             newline();
-            return QSER_OK;
+            return PREPROQ_OK;
         }     
 
 
         int quantifier(QType qtype) {
             whitespace();
-            if(!check('(')) return QSER_ERROR;
+            if(!check('(')) return PREPROQ_ERROR;
             do {
                 whitespace();
                 readVar();
                 assert(buffer != "");
                 if(mapper.find(buffer) != mapper.end()){
                     PERR("Variable " << buffer << " is already allocated!");
-                    return QSER_ERROR;
+                    return PREPROQ_ERROR;
                 }
                 VarId vid = registerVar();
-                writeBqcir(qtype == Forall ? -vid : vid);
+                circ.addVar(vid, qtype);
 
                 whitespace();
                 if(cur == ',') next();
@@ -174,71 +163,90 @@ namespace qser {
             }   
             while(!isEof());
             whitespace();
-            if(!check(')')) return QSER_ERROR;
+            if(!check(')')) return PREPROQ_ERROR;
             whitespace();
             newline();
-            return QSER_OK;
+            return PREPROQ_OK;
         }
 
         int outputSpec() {
             whitespace();
-            if(!check('(')) return QSER_ERROR;
+            if(!check('(')) return PREPROQ_ERROR;
 
+            outputPhase = cur != '-';
+            if(!outputPhase)
+                next();
             readVar();
             output = buffer;
 
-            writeBqcir(0);  //end of Prefix
-
             whitespace();
-            if(!check(')')) return QSER_ERROR;
+            if(!check(')')) return PREPROQ_ERROR;
             whitespace();
             newline();
-            return QSER_OK;
+            return PREPROQ_OK;
         }
 
         int gate() {
             if(mapper.find(buffer) != mapper.end()) {
                 PERR("Specified gate var " << buffer << " is already existing");
-                return QSER_ERROR;
+                return PREPROQ_ERROR;
             }
             VarId vid = registerVar();
 
             whitespace();
-            if(!check('=')) return QSER_ERROR;            
+            if(!check('=')) return PREPROQ_ERROR;            
             whitespace();
 
             readVar();
             int kid = isKeyword();
 
-            BqcirGate gtype = And;
+            GType gtype = GT_And;
             switch (kid)
             {
-            case And: case Or:
-                gtype = qcir_to_bqcir[kid];
+            case 6:
+                gtype = GT_And;
+                break;
+            case 7:
+                gtype = GT_Or;
                 break;
             
             default:
                 break;
             }
 
-            if(!check('(')) return QSER_ERROR;
+            circ.addGate(vid, gtype);
+            
+            if(!check('(')) return PREPROQ_ERROR;
             do {
                 whitespace();
+
+                if(cur == ')')
+                    break;
+                
+                bool neg = cur == '-';
+                if(neg) next();
+                
                 readVar();
+
                 assert(buffer != "");
                 auto it = mapper.find(buffer);
                 if(it == mapper.end()){
                     PERR("Variable " << buffer << " is unknown at this point!");
-                    return QSER_ERROR;
+                    return PREPROQ_ERROR;
                 } 
                 VarId child = it->second;
-
+                circ.pushBackChild(neg ? -child : child);
 
                 whitespace();
                 if(cur == ',') next();
                 else break;
             }while(!isEof());
-
+            
+            if(!check(')')) return PREPROQ_ERROR;
+            whitespace();
+            newline();
+            return PREPROQ_OK;
+            
         }
 
         int stream() {
@@ -246,8 +254,8 @@ namespace qser {
             
             bool qblockoccurred = false;
 
-            if(formatId(gexpect) != QSER_OK)
-                return QSER_ERROR;
+            if(formatId(gexpect) != PREPROQ_OK)
+                return PREPROQ_ERROR;
 
             do {
                 readVar();
@@ -259,33 +267,36 @@ namespace qser {
                     case Free: 
                         if(qblockoccurred) {
                             PERR("Free block is only allowed as the very first quantifier block!");
-                            return QSER_ERROR;
+                            return PREPROQ_ERROR;
                         }
-                    case Forall: 
-                    case Exists: 
-                        qt = static_cast<QType>(kid);
+                    case QCIR_KW_FORALL:
+                    case QCIR_KW_EXISTS: 
+                        qt = kid == QCIR_KW_FORALL ? Forall : Exists;
                         qblockoccurred = true;
-                        if(quantifier(qt) != QSER_OK) return QSER_ERROR;
+                        if(quantifier(qt) != PREPROQ_OK) return PREPROQ_ERROR;
                         break;                    
                     case QCIR_KEYWORD_OUTPUT: 
-                        if(outputSpec() != QSER_OK) return QSER_ERROR;
+                        if(outputSpec() != PREPROQ_OK) return PREPROQ_ERROR;
                         break;
                     default:
                         ERR("Keyword " << buffer << " received when quantifier expected!");
-                        return QSER_ERROR;
+                        return PREPROQ_ERROR;
                     }
                 }
                 else {
                     bool isOutput = buffer == output;
-                    if(gate() != QSER_OK) return QSER_ERROR;
+                    if(gate() != PREPROQ_OK) return PREPROQ_ERROR;
                     if(isOutput) {
                         PINF("Output gate was parsed, terminating!");
-                        return QSER_OK;
+                        circ.root = outputPhase ? mapper[output] : - mapper[output];
+                        return PREPROQ_OK;
                     }
                 }
             }   
-            while(!isEof());         
-
+            while(!isEof());
+            PERR("Reached end of file without finding output gate!");
+            return PREPROQ_ERROR;
         }        
     };
 }
+#undef PREFIX

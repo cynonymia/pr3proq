@@ -29,6 +29,17 @@
 #error "gperf generated tables don't work with this execution character set. Please report a bug to <bug-gperf@gnu.org>."
 #endif
 
+#line 10 "./gperf/gperf.inp"
+
+#define QCIR_KW_QCIR 1
+#define QCIR_KW_FREE 2
+#define QCIR_KW_FORALL 3
+#define QCIR_KW_EXISTS 4
+#define QCIR_KW_OUTPUT 5
+#define QCIR_KW_AND 6
+#define QCIR_KW_OR 7
+#define QCIR_KW_XOR 8
+#define QCIR_KW_ITE 9
 #line 6 "./gperf/gperf.inp"
 struct Keyword {
     const char* name; 
@@ -132,29 +143,29 @@ QcirKeywords::isKeyword (const char *str, size_t len)
   static struct Keyword wordlist[] =
     {
       {""}, {""},
-#line 17 "./gperf/gperf.inp"
-      {"or", 7},
-#line 18 "./gperf/gperf.inp"
-      {"xor", 8},
-#line 11 "./gperf/gperf.inp"
-      {"qcir", 1},
+#line 28 "./gperf/gperf.inp"
+      {"or", QCIR_KW_OR},
+#line 29 "./gperf/gperf.inp"
+      {"xor", QCIR_KW_XOR},
+#line 22 "./gperf/gperf.inp"
+      {"qcir", QCIR_KW_QCIR},
       {""},
-#line 15 "./gperf/gperf.inp"
-      {"output", 5},
+#line 26 "./gperf/gperf.inp"
+      {"output", QCIR_KW_OUTPUT},
       {""},
-#line 19 "./gperf/gperf.inp"
-      {"ite", 9},
-#line 12 "./gperf/gperf.inp"
-      {"free", 2},
+#line 30 "./gperf/gperf.inp"
+      {"ite", QCIR_KW_ITE},
+#line 23 "./gperf/gperf.inp"
+      {"free", QCIR_KW_FREE},
       {""},
-#line 13 "./gperf/gperf.inp"
-      {"forall", 3},
+#line 24 "./gperf/gperf.inp"
+      {"forall", QCIR_KW_FORALL},
       {""},
-#line 16 "./gperf/gperf.inp"
-      {"and", 6},
+#line 27 "./gperf/gperf.inp"
+      {"and", QCIR_KW_AND},
       {""}, {""},
-#line 14 "./gperf/gperf.inp"
-      {"exists", 4}
+#line 25 "./gperf/gperf.inp"
+      {"exists", QCIR_KW_EXISTS}
     };
 
   if (len <= MAX_WORD_LENGTH && len >= MIN_WORD_LENGTH)

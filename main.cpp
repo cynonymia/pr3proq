@@ -8,7 +8,7 @@
 using namespace preproq;
 
 int main(int argc, char** argv){
-    //global_verbose = VERBOSE_DEBUG;
+    //global_verbose = VERBOSE_POINTER_LEVEL;
     if(argc < 2) {
         INF("No input specified! Shutting down...");
         return PREPROQ_OK;
@@ -19,7 +19,7 @@ int main(int argc, char** argv){
     ERROR_IF(!input.good(), "Input file " << argv[1] << " was not good!");
 
     Circuit circ;
-    ERROR_IF(qcir::parse_cleansed(input, circ) != PREPROQ_OK, "Parser exited with errors!");
+    ERROR_IF(qcir::parse(input, circ, argv[1]) != PREPROQ_OK, "Parser exited with errors!");
 
     PreProQ proq(circ);
     

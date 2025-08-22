@@ -42,6 +42,46 @@ TEST_CASE("Simple parse cleansed", "[QCIR]"){
   }
 }
 
+TEST_CASE("Simple parse", "[QCIR]"){
+    
+  INPUT("#QCIR-14\n" "forall(a)\n" "exists(b)\n" "output(-g3)\n" "g1 = or(a, b)\n" "g2 = or(-a, -b)\n" "g3 = and(g1, g2)\n");
+  Circuit circ;
+  REQUIRE(qcir::parse(input, circ) == PREPROQ_OK);
+  
+  REQUIRE(circ.varSize() == 5);  
+  REQUIRE(circ.root == -5);
+
+  bool tseitin[5] = {false, false, true, true, true};
+  unsigned char assignment[5] = {VA_None, VA_None, VA_None, VA_None, VA_None};
+  unsigned char gtype[5] = {0, 0, GT_Or, GT_Or, GT_And};
+  size_t head[5] = {0, 0, 1, 4, 7};
+  unsigned char qtype[5] = {Forall, Exists, Tseitin, Tseitin, Tseitin};
+
+  for(VarId vid = 1; vid <= 5; vid++) {
+    PDBG("Testing properties for " << vid);
+    REQUIRE(circ.tseitin(vid) == tseitin[vid-1]);
+    REQUIRE(circ.var(vid).assignment == assignment[vid-1]);
+    REQUIRE(circ.var(vid).gtype == gtype[vid-1]);
+    REQUIRE(circ.var(vid).head == head[vid-1]);
+    REQUIRE(circ.var(vid).qtype == qtype[vid-1]);
+  }  
+
+  Literal expected[9] = {1,2,0,-1,-2,0,3,4,0};
+
+  for(NodeChild cid = 1; cid <= 9; cid++) {
+    PDBG("Testing properties for " << cid);
+    REQUIRE(circ.get(cid) == expected[cid-1]);    
+  }
+}
+
+TEST_CASE("Parse empty gates", "[QCIR]"){
+    
+  INPUT("#QCIR-14\n" "forall(a)\n" "exists(b)\n" "output(g3)\n" "g1 = or()\n" "g2 = or()\n" "g3 = and(g1, g2)\n");
+  Circuit circ;
+  REQUIRE(qcir::parse(input, circ) == PREPROQ_OK);
+}
+
+
 TEST_CASE("Correct Init", "[PreProQ]") {
   CIRCUIT("#QCIR-14\n" "forall(1)\n" "exists(2)\n" "output(-5)\n" "3 = or(1, 2)\n" "4 = or(-1, -2)\n" "5 = and(-3, -4)\n");
   PreProQ p(circ);

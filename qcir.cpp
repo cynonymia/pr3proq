@@ -1,23 +1,13 @@
+#include <compare>
 #include "circuit.hpp"
 #include "globals.hpp"
 #include "logging.hpp"
-#include <compare>
 #include "qcir.hpp"
+#include "serializer.hpp"
 
 namespace preproq::qcir {
-#include "qcir_keywords.hpp"
 
 #define PREFIX "[QcirParse:" << line << ":" << col << "] "    
-
-    #define QCIR_TOKEN_QCIR 1
-    #define QCIR_TOKEN_FREE 2
-    #define QCIR_TOKEN_FORALL 3
-    #define QCIR_TOKEN_EXISTS 4
-    #define QCIR_TOKEN_OUTPUT 5
-    #define QCIR_TOKEN_AND 6
-    #define QCIR_TOKEN_OR 7
-    #define QCIR_TOKEN_XOR 8
-    #define QCIR_TOKEN_ITE 9
 
 #define EXPECT(ex) do { PERROR_IF(cur != ex, "Expected " << ex << " but instead got " << cur) else next(); } while(0)
     
@@ -142,11 +132,11 @@ namespace preproq::qcir {
                 readText();
                 int keywordId = isKeyword();
                 QType qtype = Free;
-                if(keywordId == QCIR_TOKEN_FORALL) 
+                if(keywordId == QCIR_KW_FORALL) 
                     qtype = Forall;
-                else if(keywordId == QCIR_TOKEN_EXISTS)
+                else if(keywordId == QCIR_KW_EXISTS)
                     qtype = Exists;
-                else if(keywordId == QCIR_TOKEN_OUTPUT) {
+                else if(keywordId == QCIR_KW_OUTPUT) {
                     return parseOutput();
                 }                
                 else {
@@ -186,13 +176,13 @@ namespace preproq::qcir {
                 readText();
                 int keywordId = isKeyword();
                 GType gtype = GT_Or;
-                if(keywordId == QCIR_TOKEN_OR) {
+                if(keywordId == QCIR_KW_OR) {
                     //Already set
                 }
-                else if(keywordId == QCIR_TOKEN_AND) {
+                else if(keywordId == QCIR_KW_AND) {
                     gtype = GT_And;
                 }
-                else if(keywordId == QCIR_TOKEN_ITE || keywordId == QCIR_TOKEN_XOR) {
+                else if(keywordId == QCIR_KW_ITE || keywordId == QCIR_KW_XOR) {
                     PERR("Violation of cleansed form: ITE and XOR gates are not supported!");
                     return PREPROQ_ERROR;
                 }
@@ -239,5 +229,10 @@ namespace preproq::qcir {
         return p.parse();        
     }
 
-    #undef PREFIX
+#undef PREFIX
+
+    int parse(std::istream& input, Circuit& circ, std::string target) {
+        QcirSerializer qser(input, circ, target);
+        return qser.stream();
+    }
 }

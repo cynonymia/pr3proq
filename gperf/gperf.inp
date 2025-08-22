@@ -7,13 +7,24 @@ struct Keyword {
     const char* name; 
     char id = 0;
 };
+%{
+#define QCIR_KW_QCIR 1
+#define QCIR_KW_FREE 2
+#define QCIR_KW_FORALL 3
+#define QCIR_KW_EXISTS 4
+#define QCIR_KW_OUTPUT 5
+#define QCIR_KW_AND 6
+#define QCIR_KW_OR 7
+#define QCIR_KW_XOR 8
+#define QCIR_KW_ITE 9
+%}
 %%
-qcir, 1
-free, 2
-forall, 3
-exists, 4
-output, 5
-and, 6
-or, 7
-xor, 8
-ite, 9
+qcir, QCIR_KW_QCIR
+free, QCIR_KW_FREE
+forall, QCIR_KW_FORALL
+exists, QCIR_KW_EXISTS
+output, QCIR_KW_OUTPUT
+and, QCIR_KW_AND
+or, QCIR_KW_OR
+xor, QCIR_KW_XOR
+ite, QCIR_KW_ITE

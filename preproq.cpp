@@ -43,6 +43,7 @@ namespace preproq{
     int PreProQ::run() {        
         bool working = false;
         size_t iteration = 1;
+
         do {
             INF("Start Iteration " << iteration);
             for(VarId vid = circ.gateBegin(); vid != circ.gateEnd(); vid++) {
