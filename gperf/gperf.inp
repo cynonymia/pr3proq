@@ -1,0 +1,19 @@
+%language=C++
+%ignore-case
+%define class-name QcirKeywords
+%define lookup-function-name isKeyword
+%struct-type
+struct Keyword {
+    const char* name; 
+    char id = 0;
+};
+%%
+qcir, 1
+free, 2
+forall, 3
+exists, 4
+output, 5
+and, 6
+or, 7
+xor, 8
+ite, 9
