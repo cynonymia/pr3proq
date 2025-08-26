@@ -7,18 +7,33 @@
 
 namespace preproq::qcir {
 
-#define PREFIX "[QcirParse:" << line << ":" << col << "] "    
+#define PREFIX "[QCIR at " << target << ":" << line << ":" << col << "] "    
 
 #define EXPECT(ex) do { PERROR_IF(cur != ex, "Expected " << ex << " but instead got " << cur) else next(); } while(0)
     
     class CleansedParser {
         std::istream& inp;
+        std::string target;
         Circuit& circ;
         size_t line = 1;
         size_t col = 0;
         int cur = 0;
 
+        VarId nextVar = 1;
+        std::vector<Literal> translator;
+        
         std::string buffer;
+
+
+        VarId registerVar(VarId vid) {
+            if(translator.size() <= vid) {
+                translator.resize(vid+1, 0);
+            }
+            VarId nvid = nextVar++;
+            translator[vid] = nvid;
+            PPTR("Register " << vid << " -> " << nvid);
+            return nvid;
+        }
         
         bool isEof() {return cur == EOF;}
         
@@ -87,16 +102,13 @@ namespace preproq::qcir {
                 next();
         }
 
-        int parseComments() {
-            while(1){                
-                if(cur == '#') {
-                    PPTR("Skipping comment");
-                    while(!isEof() && cur != '\n')
-                        next();
-                    skipNewlines();
-                }
-                else
-                    break;
+        int parseFormatId() {
+             
+            if(cur == '#') {
+                PPTR("Skipping comment");
+                while(!isEof() && cur != '\n')
+                    next();
+                skipNewlines();
             }
             return !isEof() ? PREPROQ_OK : PREPROQ_ERROR;
         }
@@ -105,7 +117,8 @@ namespace preproq::qcir {
             EXPECT('(');
             while(!isEof()) {
                 int n = readNumber();
-                circ.addVar(VAR(n), qtype);
+                n = registerVar(n);
+                circ.addVar(n, qtype);
                 if(cur == ',')
                     next();
                 else
@@ -155,6 +168,7 @@ namespace preproq::qcir {
             EXPECT('(');
             while(!isEof()) {
                 int n = readInteger();
+                n = n < 0 ? -translator[-n] : translator[n];
                 circ.pushBackChild(n);
                 if(cur == ',')
                     next();
@@ -171,6 +185,7 @@ namespace preproq::qcir {
                 if(!isNumber())
                     return PREPROQ_OK;
                 VarId vid = readNumber();
+                vid = registerVar(vid);
                 EXPECT('=');
                 PERROR_IF(!isText(), "Expecting gate modifier at this point");
                 readText();
@@ -202,12 +217,12 @@ namespace preproq::qcir {
         
     public:
 
-        CleansedParser(std::istream& inp, Circuit& circ) : inp(inp), circ(circ) {
+        CleansedParser(std::istream& inp, Circuit& circ, std::string target) : inp(inp), circ(circ), target(target) {
             next();
         }
         
         int parse() {
-            PERROR_IF(parseComments() == PREPROQ_ERROR,
+            PERROR_IF(parseFormatId() == PREPROQ_ERROR,
                   "Encountered EOF during traversing comments");
 
             if(parseQBlocks() == PREPROQ_ERROR)
@@ -217,6 +232,9 @@ namespace preproq::qcir {
                 return PREPROQ_ERROR;
 
             assert(isEof());            
+
+            circ.root = circ.root < 0? -translator[VAR(circ.root)] : translator[VAR(circ.root)];
+            assert(circ.root != 0);
             
             return PREPROQ_OK;
         }
@@ -224,8 +242,8 @@ namespace preproq::qcir {
     };
 
   
-    int parse_cleansed(std::istream& input, Circuit& circ) {
-        CleansedParser p(input, circ);
+    int parse_cleansed(std::istream& input, Circuit& circ, std::string target) {
+        CleansedParser p(input, circ, target);
         return p.parse();        
     }
 

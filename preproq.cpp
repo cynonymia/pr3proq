@@ -43,7 +43,7 @@ namespace preproq{
     int PreProQ::run() {        
         bool working = false;
         size_t iteration = 1;
-
+        
         do {
             INF("Start Iteration " << iteration);
             for(VarId vid = circ.gateBegin(); vid != circ.gateEnd(); vid++) {
@@ -89,6 +89,7 @@ namespace preproq{
                     }
                     else {
                         tagbuffer[VAR(child)] = child < 0 ? -1 : 1;
+                        tagged.push(VAR(child));
                     }
 
                     if(circ.var(VAR(child)).assignment != VA_None) {
