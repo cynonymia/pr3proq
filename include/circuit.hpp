@@ -134,7 +134,10 @@ namespace preproq {
         }
         
         NodeChild begin(VarId vid) {
-            return var(vid).head;
+            NodeChild nc = var(vid).head;
+            if(isIndirection(nc))
+                nc = next(nc);
+            return nc;
         }
 
         bool isEnd(NodeChild nc) {

@@ -4,6 +4,7 @@
 #include "logging.hpp"
 #include "qcir.hpp"
 #include "preproq.hpp"
+#include "writer.hpp"
 
 #define INPUT(x) std::stringstream input(x)
 
@@ -121,4 +122,20 @@ TEST_CASE("Eliminate Duplicate/Tautology simple", "[PreProQ]") {
   REQUIRE(circ.var(6).assignment==VA_False);  
   REQUIRE(circ.calculateChildrenCount(7)==2);
   REQUIRE(circ.var(8).assignment==VA_True);
+}
+
+TEST_CASE("Eliminate Constant", "[PreProQ]") {
+    CIRCUIT("#QCIR-14\n" "exists(1,2)\n" "output(4)\n" "3 = or()\n" "4 = and(-3, 1, 2)\n");
+    PreProQ p(circ);
+    global_verbose = VERBOSE_POINTER_LEVEL;
+    REQUIRE(p.run() == PREPROQ_OK);
+    VarId vid = 4;
+    NodeChild c = circ.begin(vid);
+    REQUIRE(circ.get(c) == 1);
+    c = circ.next(c);
+    REQUIRE(circ.get(c) == 2);
+    c = circ.next(c);
+    REQUIRE(circ.isEnd(c));
+    
+    global_verbose = VERBOSE_ERROR;
 }
