@@ -27,8 +27,10 @@ namespace preproq{
             for(NodeChild c = circ.begin(vid); !circ.isEnd(c); c = circ.next(c)) {
                 Literal cl = circ.get(c);
                 PTR("Child " << cl <<"(" << c <<")");
-                circ.var(VAR(cl)).pos = circ.var(VAR(cl)).pos || ((cl > 0) && circ.var(vid).pos) || ((cl < 0) && circ.var(vid).neg);
-                circ.var(VAR(cl)).neg = circ.var(VAR(cl)).neg || ((cl < 0) && circ.var(vid).pos) || ((cl > 0) && circ.var(vid).neg);
+                circ.var(VAR(cl)).pos = circ.var(VAR(cl)).pos ||
+                    ((cl > 0) && circ.var(vid).pos) || ((cl < 0) && circ.var(vid).neg);
+                circ.var(VAR(cl)).neg = circ.var(VAR(cl)).neg ||
+                    ((cl < 0) && circ.var(vid).pos) || ((cl > 0) && circ.var(vid).neg);
                 if(circ.tseitin(VAR(cl))) {
                     PTR("Push " << cl << " to iteration stack");
                     iteration.push(cl);
@@ -82,7 +84,8 @@ namespace preproq{
                             continue;
                         }
                         else {
-                            PINF("Eliminating tautology/contradiction " << child << ", " << -child << " in gate " << vid);
+                            PINF("Eliminating tautology/contradiction " << child <<
+                                 ", " << -child << " in gate " << vid);
                             circ.var(vid).assignment = gtype == GT_And ? VA_False : VA_True;
                             break;
                         }                        
@@ -112,6 +115,8 @@ namespace preproq{
                     if(circ.tseitin(VAR(child))) {                        
                         NodeChild grandc = circ.begin(VAR(child));
 
+                        unsigned char cgtype = circ.var(VAR(child)).gtype;
+                        
                         ERROR_IF(circ.isEnd(grandc), "Encountered non-assigned empty gate in children! Breach of bottom-up inconstraint!");
 
                         //Singularity elimination
@@ -121,6 +126,24 @@ namespace preproq{
                             circ.set(c, child < 0 ? -grandchild : grandchild);
                             continue;
                         }
+
+                        if(cgtype == gtype && child > 0) {  //positive equal
+                            circ.set(c, circ.get(grandc));
+                            grandc = circ.next(grandc);
+                            while(!circ.isEnd(grandc)) {
+                                circ.addChild(vid, circ.get(grandc));
+                                grandc = circ.next(grandc);
+                            }
+                        }
+                        else if(cgtype != gtype && child < 0) { //negative not equal
+                            circ.set(c, -circ.get(grandc));
+                            grandc = circ.next(grandc);
+                            while(!circ.isEnd(grandc)) {
+                                circ.addChild(vid, -circ.get(grandc));
+                                grandc = circ.next(grandc);
+                            }
+                        }
+
                     }
                 }                
             }

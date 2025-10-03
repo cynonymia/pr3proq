@@ -62,6 +62,8 @@ namespace preproq {
 
         VarId firstGate = 0;
 
+        VarId currentLast = 0;
+
         inline bool isIndirection(NodeChild nid) {
             assert(nid < children.size());
             return (children[nid] & 1) > 0;
@@ -103,6 +105,7 @@ namespace preproq {
             vars[vid].gtype = gt;
             vars[vid].head = children.size();
             children.push_back(0);  //initialize empty children list
+            currentLast = vid;
         }
 
         //adds a child to the previously specified gate
@@ -110,6 +113,36 @@ namespace preproq {
             assert(children.size() > 0);
             children[children.size()-1] = lit << 1;
             children.push_back(0);
+        }
+
+        void addChild(VarId vid, Literal lit) {
+            if(currentLast == vid){
+                pushBackChild(lit);
+                return;
+            }
+            NodeChild nc = var(vid).head;            
+            do {
+                if(isEnd(nc)) {
+                    unsigned target = children.size();
+                    children.push_back(lit);
+                    children.push_back(0);
+                    children[nc] = ((target - nc) << 1) + 1;    //set indirection
+                    currentLast = vid;
+                    return;
+                }
+                
+                if(isIndirection(nc)){
+                    if (get(nc >> 1) == 1)  {
+                        children[nc] = lit << 1;    //fill in for deleted element
+                        return;
+                    }
+                    else
+                        nc = nc + (get(nc) >> 1); // resolve one relative ref
+                }
+                else
+                    nc++;
+            }while(nc < children.size());
+            assert(false);  //should never get here
         }
 
         inline VarId gateBegin() {
@@ -147,9 +180,10 @@ namespace preproq {
         NodeChild next(NodeChild child) {
             child++;
             Literal elem = children[child];
-            if((elem & 1) > 0) {
+            while((elem & 1) > 0) {
                 //Indirection
-                return child + (elem >> 1); // relative reference
+                child = child + (elem >> 1); // relative reference
+                elem = children[child];
             }
             return child;
         }

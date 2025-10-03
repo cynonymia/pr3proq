@@ -32,7 +32,7 @@ namespace preproq {
                     curq = Tseitin;
                 }
                 out << vid << " = " << (circ.var(vid).gtype == GT_And ? "and": "or") << "(";
-                NodeChild nc = circ.var(vid).head;
+                NodeChild nc = circ.begin(vid);
                 bool first = true;
                 while(!circ.isEnd(nc)) {
                     if(first) first = false;
