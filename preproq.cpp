@@ -126,8 +126,8 @@ namespace preproq{
                             circ.set(c, child < 0 ? -grandchild : grandchild);
                             continue;
                         }
-
-                        if(cgtype == gtype && child > 0) {  //positive equal
+                        else if(cgtype == gtype && child > 0) {  //positive equal
+                            PINF("Collapsing gate " << child << " into " << vid);
                             circ.set(c, circ.get(grandc));
                             grandc = circ.next(grandc);
                             while(!circ.isEnd(grandc)) {
@@ -136,6 +136,7 @@ namespace preproq{
                             }
                         }
                         else if(cgtype != gtype && child < 0) { //negative not equal
+                            PINF("Collapsing gate " << child << " into " << vid);
                             circ.set(c, -circ.get(grandc));
                             grandc = circ.next(grandc);
                             while(!circ.isEnd(grandc)) {
@@ -143,7 +144,6 @@ namespace preproq{
                                 grandc = circ.next(grandc);
                             }
                         }
-
                     }
                 }                
             }

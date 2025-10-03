@@ -124,7 +124,7 @@ namespace preproq {
             do {
                 if(isEnd(nc)) {
                     unsigned target = children.size();
-                    children.push_back(lit);
+                    children.push_back(lit << 1);
                     children.push_back(0);
                     children[nc] = ((target - nc) << 1) + 1;    //set indirection
                     currentLast = vid;
