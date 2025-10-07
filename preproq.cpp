@@ -4,8 +4,8 @@
 
 namespace preproq{
 
-    void PreProQ::init() {
-        INF("Initializing");
+    void PreProQ::traceActive() {
+        DBG("Tracing active gates");
         std::stack<Literal> iteration;
         iteration.push(circ.root);
         if(circ.root < 0)
@@ -40,6 +40,17 @@ namespace preproq{
         curColor = SWITCH_COLOR(curColor);
     }
 
+    void PreProQ::cleanupUsage() {
+        DBG("Reset flags on variables to retrace");
+        for(VarId vid = circ.varBegin(); vid != circ.varEnd(); vid++) {
+            circ.var(vid).neg = 0;
+            circ.var(vid).pos = 0;
+        }        
+        INF("Tracing used gates");
+        std::stack<Literal> iteration;
+        traceActive();
+    }
+    
 
     #define PREFIX "[Iteration:" << iteration << "] " 
     int PreProQ::run() {        
@@ -147,6 +158,7 @@ namespace preproq{
                     }
                 }                
             }
+            cleanupUsage();    
             PDBG("End of iteration");
             iteration++;
         }

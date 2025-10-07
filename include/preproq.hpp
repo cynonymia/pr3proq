@@ -14,21 +14,23 @@ namespace preproq {
         
         NodeColor curColor = Red;
 
-        void init();
+        void traceActive();
 
         inline void resetTagBuffer() {
             while(!tagged.empty()) {
                 tagbuffer[tagged.top()] = 0;
                 tagged.pop();
             }
-            //memset(&tagbuffer[0], 0, tagbuffer.size() * sizeof(char));
         }
+
+        void cleanupUsage();
 
     public:
         PreProQ(Circuit& circ) : circ(circ) {
+            INF("Initializing");
             tagbuffer.resize(circ.varSize()+1);
             resetTagBuffer();
-            init();
+            traceActive();
         }
 
         int run();
