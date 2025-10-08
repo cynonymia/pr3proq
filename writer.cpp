@@ -7,11 +7,12 @@ namespace preproq {
         QType curq = Free;
         for(VarId vid = circ.varBegin(); vid < circ.varEnd(); vid++) {
 
-            if(!circ.var(vid).active())
+            if(!circ.var(vid).active()) 
                 continue;   //skip zombies
-
-            if(circ.var(vid).assignment != VA_None)
+                            
+            if(circ.var(vid).assignment != VA_None) 
                 continue; //skip assigned
+            
 
             QType q  = static_cast<QType>(circ.var(vid).qtype);
 

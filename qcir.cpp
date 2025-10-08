@@ -166,8 +166,9 @@ namespace preproq::qcir {
 
         int parseGateChildren(VarId vid) {
             EXPECT('(');
-            while(!isEof()) {
+            while(!isEof() && isInteger()) {
                 int n = readInteger();
+                assert(translator[abs(n)] != 0);
                 n = n < 0 ? -translator[-n] : translator[n];
                 circ.pushBackChild(n);
                 if(cur == ',')
