@@ -15,6 +15,7 @@ namespace preproq {
         NodeColor curColor = Red;
 
         void traceActive();
+        bool localUnit();
 
         inline void resetTagBuffer() {
             while(!tagged.empty()) {

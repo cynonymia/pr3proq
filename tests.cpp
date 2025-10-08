@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <sstream>
+#include "circuit.hpp"
 #include "globals.hpp"
 #include "logging.hpp"
 #include "qcir.hpp"
@@ -118,7 +119,7 @@ TEST_CASE("Eliminate Duplicate/Tautology simple", "[PreProQ]") {
   CIRCUIT("#QCIR-14\n" "exists(1,2,3,4)\n" "output(9)\n" "5 = and(1,1,2)\n" "6 = and(3,-3,4)\n" "7 = or(1,1,2)\n" "8 = or(3,-3,4)\n" "9 = or(5,6,7,8)\n");
   PreProQ p(circ);
   REQUIRE(p.run() == PREPROQ_SAT);
-  REQUIRE(circ.calculateChildrenCount(5)==2);
+  REQUIRE(circ.calculateChildrenCount(5)==1);
   REQUIRE(circ.var(6).assignment==VA_False);  
   REQUIRE(circ.calculateChildrenCount(7)==2);
   REQUIRE(circ.var(8).assignment==VA_True);
@@ -171,3 +172,21 @@ TEST_CASE("Gate Collapse Negated", "[PreProQ]") {
     REQUIRE(circ.isEnd(c));
 }
 
+TEST_CASE("Local Unit Assignment Condition", "[PreProQ]") {
+    GType gtype = GT_Or;
+    Literal lit = 1;
+    
+    REQUIRE(((gtype == GType::GT_Or) == (lit > 0)));
+    lit = -1;
+    REQUIRE(!((gtype == GType::GT_Or) == (lit > 0)));
+    gtype = GT_And;
+    REQUIRE(((gtype == GType::GT_Or) == (lit > 0)));
+    lit = 1;
+    REQUIRE(!((gtype == GType::GT_Or) == (lit > 0)));
+}
+
+TEST_CASE("Local Unit", "[PreProQ]") {
+    CIRCUIT("#QCIR-14\n" "forall(1)\n" "exists(2)\n" "output(4)\n" "3 = or (1, -2)\n" "4 = and (3, 1)\n");
+    PreProQ p(circ);
+    REQUIRE(p.run() == PREPROQ_OK);
+}

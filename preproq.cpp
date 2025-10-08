@@ -1,6 +1,7 @@
 #include <cassert>
 #include <stack>
 #include "preproq.hpp"
+#include "circuit.hpp"
 
 namespace preproq{
 
@@ -26,11 +27,13 @@ namespace preproq{
             circ.var(vid).color = curColor;
             for(NodeChild c = circ.begin(vid); !circ.isEnd(c); c = circ.next(c)) {
                 Literal cl = circ.get(c);
+                GateVar& var = circ.var(VAR(cl));
                 PTR("Child " << cl <<"(" << c <<")");
-                circ.var(VAR(cl)).pos = circ.var(VAR(cl)).pos ||
-                    ((cl > 0) && circ.var(vid).pos) || ((cl < 0) && circ.var(vid).neg);
-                circ.var(VAR(cl)).neg = circ.var(VAR(cl)).neg ||
-                    ((cl < 0) && circ.var(vid).pos) || ((cl > 0) && circ.var(vid).neg);
+
+                var.dag = var.pos || var.neg; //if already set, multiple references are made to this variable
+                var.pos = var.pos || ((cl > 0) && circ.var(vid).pos) || ((cl < 0) && circ.var(vid).neg);                
+                var.neg = var.neg || ((cl < 0) && circ.var(vid).pos) || ((cl > 0) && circ.var(vid).neg);            
+
                 if(circ.tseitin(VAR(cl))) {
                     PTR("Push " << cl << " to iteration stack");
                     iteration.push(cl);
@@ -45,17 +48,130 @@ namespace preproq{
         for(VarId vid = circ.varBegin(); vid != circ.varEnd(); vid++) {
             circ.var(vid).neg = 0;
             circ.var(vid).pos = 0;
+            circ.var(vid).dag = 0;
         }        
-        INF("Tracing used gates");
         std::stack<Literal> iteration;
         traceActive();
-    }
-    
+    }    
 
+#define PREFIX "[LocalUnitRed] "
+    bool PreProQ::localUnit() {
+        PDBG("Start");
+        bool reduced = false;
+        std::stack<VarId> working;  //for gates of the current derivation tree
+        std::stack<VarId> stale;    //for gates that need a hard reset
+        std::stack<VarId> assigned; //for the assignments of the local units
+        std::stack<int> localCount; //count of local knowledge variables
+        
+        working.push(VAR(circ.root));   //start with root
+
+        while(!working.empty() || !stale.empty()) {
+            PPTR("Outer iteration started with working:" << working.size() << ", stale:" << stale.size());
+            if(working.empty()) {   //transfer 
+                working.push(stale.top());
+                PPTR("Transfer " << stale.top() << " to working");
+                stale.pop();
+            }
+
+            //process working stack
+            do {
+                PPTR("Inner iteration started");
+                assert(circ.tseitin(working.top()));
+                VarId vid = working.top();
+                GType gtype = static_cast<GType>(circ.var(vid).gtype);
+                working.pop();
+
+                if(circ.var(vid).color == curColor){ //already visited
+                    PPTR("Skip already visited " << vid);
+                    continue;
+                }
+                circ.var(vid).color = curColor; //mark visited
+
+                working.push(0);    //mark scope
+
+                int assignments = 0;
+                for(NodeChild c = circ.begin(vid); !circ.isEnd(c); c = circ.next(c)) {
+                    Literal lit = circ.get(c);
+                    PPTR("Processing " << lit << " of " << vid);
+                                        
+                    if(!circ.tseitin(VAR(lit))) {   //push knowledge
+
+                        if(circ.var(VAR(lit)).assignment != VA_None) {  //apply knowledge
+                            reduced = true;
+                            Assignment a = static_cast<Assignment>(circ.var(VAR(lit)).assignment);
+                            if(lit < 0)
+                                a = static_cast<Assignment>(SWITCH_ASSIGNMENT(a));
+                                                       
+                            if((a == VA_True) == (gtype == GT_Or)) {
+                                PINF("Propagating Constant from " << lit << ": " << (a == VA_True ? "True" : "False") <<
+                                     " in gate " << vid);
+                                circ.var(vid).assignment = a;
+                                break;  //skip out, this gate is finished
+                            }
+                            else {
+                                PINF("Deleting child falsified by local unit: " << lit << " of " << vid);
+                                circ.deleteAt(c);
+                            }
+                        }
+                        else {
+                            circ.var(VAR(lit)).assignment = (gtype == GType::GT_Or) == (lit > 0) ? VA_True : VA_False;
+                            circ.var(VAR(lit)).localMark = 1;   //mark as local
+                            assigned.push(VAR(lit));
+                            PPTR("Found unassigned Local Unit " << lit << ", assigning " <<
+                                 (circ.var(VAR(lit)).assignment == VA_False ? "False" : "True"));
+                            assignments++;
+                        }
+                    }
+                    else {
+                        if(circ.var(VAR(lit)).dag){ //as referenced multiple times, need a hard reset
+                            PPTR("Pushing " << VAR(lit) << " to stale");
+                            stale.push(VAR(lit));                            
+                        }
+                        else {
+                            PPTR("Pushing " << VAR(lit) << " to working");
+                            working.push(VAR(lit));                            
+                        }
+                    }
+                }
+
+                localCount.push(assignments);
+
+                //backtrack
+                while(!working.empty() && working.top() == 0) {
+                    int remcnt = localCount.top();
+                    PDBG("Backtracking with forgetting " << remcnt << " elements");
+                    localCount.pop();
+                    while(remcnt--) {
+                        circ.var(assigned.top()).assignment = VA_None;
+                        circ.var(assigned.top()).localMark = 1;
+                        PPTR("Forgetting " << assigned.top());
+                        assigned.pop();
+                        
+                    }
+                    working.pop();
+                }
+                                
+            } while(!working.empty());
+            
+            //reset assignments, if any left
+            while(!assigned.empty()) {
+                circ.var(assigned.top()).assignment = VA_None;
+                circ.var(assigned.top()).localMark = 1;
+                assigned.pop();
+            }
+            while(!localCount.empty())
+                localCount.pop();            
+        }
+        curColor = SWITCH_COLOR(curColor);
+        return reduced;        
+    }
+    #undef PREFIX
+    
     #define PREFIX "[Iteration:" << iteration << "] " 
     int PreProQ::run() {        
         bool working = false;
         size_t iteration = 1;
+
         
         do {
             INF("Start Iteration " << iteration);
@@ -84,6 +200,7 @@ namespace preproq{
                     //No additional working step => assignment will be propagated automatically as gates are ordered
                 }
                 resetTagBuffer();
+                
                 for(NodeChild c = circ.begin(vid); !circ.isEnd(c); c = circ.next(c)) {
                     Literal child = circ.get(c);                
                     PPTR("Checking " << child << " of " << vid);
@@ -123,7 +240,7 @@ namespace preproq{
                         }
                     }
 
-                    if(circ.tseitin(VAR(child))) {                        
+                    if(circ.tseitin(VAR(child))) {
                         NodeChild grandc = circ.begin(VAR(child));
 
                         unsigned char cgtype = circ.var(VAR(child)).gtype;
@@ -137,6 +254,7 @@ namespace preproq{
                             circ.set(c, child < 0 ? -grandchild : grandchild);
                             continue;
                         }
+                        //Gate Collapse
                         else if(cgtype == gtype && child > 0) {  //positive equal
                             PINF("Collapsing gate " << child << " into " << vid);
                             circ.set(c, circ.get(grandc));
@@ -156,9 +274,10 @@ namespace preproq{
                             }
                         }
                     }
-                }                
+                }
             }
-            cleanupUsage();    
+            cleanupUsage();
+            working = localUnit();  //finally, apply local units which will determine whether a next iteration is needed
             PDBG("End of iteration");
             iteration++;
         }

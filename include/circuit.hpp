@@ -45,8 +45,10 @@ namespace preproq {
         unsigned char color:1 = Black;
         unsigned char gtype:1 = GT_Or;
         unsigned char assignment:2 = VA_None;
+        unsigned char localMark:1 = 0;  //if 1, the current assignment is only local
         unsigned char pos:1 = 0;
         unsigned char neg:1 = 0;
+        unsigned char dag:1 = 0;    //if 1, more than 1 reference is made to this Variable
 
         NodeChild head = 0;
 
