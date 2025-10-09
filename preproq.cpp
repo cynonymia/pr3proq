@@ -178,7 +178,6 @@ namespace preproq{
     int PreProQ::run() {        
         bool working = false;
         size_t iteration = 1;
-
 #ifdef DBG_MEM_DMP        
         std::fstream f("0.memdmp", std::ios_base::out);
         circ.memDump(f);
@@ -187,6 +186,24 @@ namespace preproq{
         do {
             working = false;
             INF("Start Iteration " << iteration);
+
+            //Pure Literal elimination
+            for(VarId vid = circ.varBegin(); vid < circ.varEnd(); vid++) {                
+                if(circ.tseitin(vid)) break;
+
+                if(circ.var(vid).assignment == VA_None) //Ignore already assigned
+                    continue;
+                
+                if(circ.var(vid).neg != circ.var(vid).pos) {
+                    Assignment a = circ.var(vid).qtype == QType::Forall ? VA_False : VA_True;
+                    if(circ.var(vid).neg)
+                        a = static_cast<Assignment>(SWITCH_ASSIGNMENT(a));
+                    PINF("Pure literal reduction: assigning " << vid << " = " << (a == VA_False ? "False" : "True"));
+                    INTR("pureLiteral " << " " << vid << " " << (a == VA_False ? 0 : 1));
+                    circ.var(vid).assignment = a;
+                }
+            }
+            
             for(VarId vid = circ.gateBegin(); vid != circ.gateEnd(); vid++) {
                 assert(circ.tseitin(vid));
 
