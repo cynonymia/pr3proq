@@ -101,6 +101,7 @@ namespace preproq::qcir {
             VarId vid = nextId++;
             mapper[buffer] = vid;
             PDBG("Translation " << buffer << " -> " << vid);
+            INTR("vmap " << buffer << " " << vid);
             return vid;
         }
 

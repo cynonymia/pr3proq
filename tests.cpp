@@ -119,7 +119,7 @@ TEST_CASE("Eliminate Duplicate/Tautology simple", "[PreProQ]") {
   CIRCUIT("#QCIR-14\n" "exists(1,2,3,4)\n" "output(9)\n" "5 = and(1,1,2)\n" "6 = and(3,-3,4)\n" "7 = or(1,1,2)\n" "8 = or(3,-3,4)\n" "9 = or(5,6,7,8)\n");
   PreProQ p(circ);
   REQUIRE(p.run() == PREPROQ_SAT);
-  REQUIRE(circ.calculateChildrenCount(5)==1);
+  REQUIRE(circ.calculateChildrenCount(5)==2);
   REQUIRE(circ.var(6).assignment==VA_False);  
   REQUIRE(circ.calculateChildrenCount(7)==2);
   REQUIRE(circ.var(8).assignment==VA_True);
@@ -176,13 +176,13 @@ TEST_CASE("Local Unit Assignment Condition", "[PreProQ]") {
     GType gtype = GT_Or;
     Literal lit = 1;
     
-    REQUIRE(((gtype == GType::GT_Or) == (lit > 0)));
+    REQUIRE(!((gtype == GType::GT_And) == (lit > 0)));
     lit = -1;
-    REQUIRE(!((gtype == GType::GT_Or) == (lit > 0)));
+    REQUIRE(((gtype == GType::GT_And) == (lit > 0)));
     gtype = GT_And;
-    REQUIRE(((gtype == GType::GT_Or) == (lit > 0)));
+    REQUIRE(!((gtype == GType::GT_And) == (lit > 0)));
     lit = 1;
-    REQUIRE(!((gtype == GType::GT_Or) == (lit > 0)));
+    REQUIRE(((gtype == GType::GT_And) == (lit > 0)));
 }
 
 TEST_CASE("Local Unit", "[PreProQ]") {

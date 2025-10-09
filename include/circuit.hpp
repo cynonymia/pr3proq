@@ -1,5 +1,6 @@
 #pragma once
 #include <cstring>
+#include <iomanip>
 #include <vector>
 #include <cassert>
 #include "logging.hpp"
@@ -134,12 +135,12 @@ namespace preproq {
                 }
                 
                 if(isIndirection(nc)){
-                    if (get(nc >> 1) == 1)  {
+                    if (get(nc) == 1)  {
                         children[nc] = lit << 1;    //fill in for deleted element
                         return;
                     }
                     else
-                        nc = nc + (get(nc) >> 1); // resolve one relative ref
+                        nc = nc + get(nc); // resolve one relative ref
                 }
                 else
                     nc++;
@@ -170,8 +171,9 @@ namespace preproq {
         
         NodeChild begin(VarId vid) {
             NodeChild nc = var(vid).head;
-            if(isIndirection(nc))
-                nc = next(nc);
+            while(isIndirection(nc)) {
+                nc = nc + (children[nc] >> 1); // relative reference
+            }
             return nc;
         }
 
@@ -182,7 +184,7 @@ namespace preproq {
         NodeChild next(NodeChild child) {
             child++;
             Literal elem = children[child];
-            while((elem & 1) > 0) {
+            while(isIndirection(child)) {
                 //Indirection
                 child = child + (elem >> 1); // relative reference
                 elem = children[child];
@@ -211,7 +213,30 @@ namespace preproq {
             return count;
         }
 
-    };
 
+#ifndef NDEBUG
+        void memDump(std::ostream& out) {
+            size_t cnt = 0;
+            for(VarId vid = varBegin(); vid != varEnd(); vid++) {
+                if(cnt % 10 == 0 && cnt != 0) out << std::endl;
+                out << vid << "[" << var(vid).head << "] ";
+                cnt++;
+            }
+            out << std::endl << std::endl;
+
+            cnt = 0;
+            out.fill('0');
+            for(size_t i = 0; i < children.size(); i++) {
+                if(cnt % 10 == 0) {
+                    if(cnt != 0)
+                        out << std::endl;
+                    out << std::setw(6) << (cnt / 10)<< std::setw(0) << "    ";
+                }
+                out << children[i] << " ";
+                cnt++;
+            }
+        }
+    };
+#endif
 
 }

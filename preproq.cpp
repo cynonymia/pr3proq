@@ -1,7 +1,9 @@
 #include <cassert>
+#include <fstream>
 #include <stack>
 #include "preproq.hpp"
 #include "circuit.hpp"
+#include "logging.hpp"
 
 namespace preproq{
 
@@ -105,24 +107,29 @@ namespace preproq{
                             if((a == VA_True) == (gtype == GT_Or)) {
                                 PINF("Propagating Constant from " << lit << ": " << (a == VA_True ? "True" : "False") <<
                                      " in gate " << vid);
+                                INTR("localUnitProp " << vid << " " << lit << " " << (a == VA_True ? 1 : 0));
                                 circ.var(vid).assignment = a;
                                 break;  //skip out, this gate is finished
                             }
                             else {
                                 PINF("Deleting child falsified by local unit: " << lit << " of " << vid);
+                                INTR("localUnitDel " << vid << " " << lit);
                                 circ.deleteAt(c);
                             }
                         }
                         else {
-                            circ.var(VAR(lit)).assignment = (gtype == GType::GT_Or) == (lit > 0) ? VA_True : VA_False;
+                            circ.var(VAR(lit)).assignment = (gtype == GType::GT_And) == (lit > 0) ? VA_True : VA_False;
                             circ.var(VAR(lit)).localMark = 1;   //mark as local
                             assigned.push(VAR(lit));
                             PPTR("Found unassigned Local Unit " << lit << ", assigning " <<
                                  (circ.var(VAR(lit)).assignment == VA_False ? "False" : "True"));
+                            INTR("localUnit " << vid << " " << abs(lit)*(circ.var(VAR(lit)).assignment == VA_False ? -1 : 1));
                             assignments++;
                         }
                     }
                     else {
+                        if(circ.var(VAR(lit)).assignment != VA_None)    //ignore assigned gates
+                            continue;                        
                         if(circ.var(VAR(lit)).dag){ //as referenced multiple times, need a hard reset
                             PPTR("Pushing " << VAR(lit) << " to stale");
                             stale.push(VAR(lit));                            
@@ -142,11 +149,11 @@ namespace preproq{
                     PDBG("Backtracking with forgetting " << remcnt << " elements");
                     localCount.pop();
                     while(remcnt--) {
+                        INTR("localUnitUnlearn " << (Literal) (assigned.top() * (circ.var(assigned.top()).assignment == VA_True ? 1 : -1)));
                         circ.var(assigned.top()).assignment = VA_None;
                         circ.var(assigned.top()).localMark = 1;
                         PPTR("Forgetting " << assigned.top());
-                        assigned.pop();
-                        
+                        assigned.pop();                   
                     }
                     working.pop();
                 }
@@ -172,8 +179,13 @@ namespace preproq{
         bool working = false;
         size_t iteration = 1;
 
-        
+#ifdef DBG_MEM_DMP        
+        std::fstream f("0.memdmp", std::ios_base::out);
+        circ.memDump(f);
+        f.close();
+#endif        
         do {
+            working = false;
             INF("Start Iteration " << iteration);
             for(VarId vid = circ.gateBegin(); vid != circ.gateEnd(); vid++) {
                 assert(circ.tseitin(vid));
@@ -194,27 +206,30 @@ namespace preproq{
 
                 if(circ.isEnd(circ.begin(vid))) {
                     //Empty gate => assign
-                    INF("Found empty gate " << vid << " - assigning!");
+                    PINF("Found empty gate " << vid << " - assigning!");
                     circ.var(vid).assignment = gtype == GT_And ? Assignment::VA_True : Assignment::VA_False;
+                    INTR("implicitConstant " << vid << " " << (gtype == GT_And ? 1 : 0));
                     continue;
                     //No additional working step => assignment will be propagated automatically as gates are ordered
                 }
                 resetTagBuffer();
                 
                 for(NodeChild c = circ.begin(vid); !circ.isEnd(c); c = circ.next(c)) {
-                    Literal child = circ.get(c);                
+                    Literal child = circ.get(c);
                     PPTR("Checking " << child << " of " << vid);
                     
                     if(tagbuffer[VAR(child)] != 0) {
                         if((tagbuffer[VAR(child)] > 0) == (child > 0)) {
                             PINF("Eliminating duplicate " <<child << " in gate " << vid);
                             circ.deleteAt(c);
+                            INTR("duplicate " << vid << " " << child);
                             continue;
                         }
                         else {
                             PINF("Eliminating tautology/contradiction " << child <<
                                  ", " << -child << " in gate " << vid);
                             circ.var(vid).assignment = gtype == GT_And ? VA_False : VA_True;
+                            INTR("tautology " << vid << " " << child << " " << (GT_And ? 0 : 1));
                             break;
                         }                        
                     }
@@ -230,11 +245,13 @@ namespace preproq{
                             a = static_cast<Assignment>(SWITCH_ASSIGNMENT(a));
                         if((a == VA_True) == (gtype == GT_Or)) {
                             PINF("Propagating constant from " << child << ": " << (a == VA_True ? "True" : "False"));
+                            INTR("constProp " << vid << " " << child << " " << (a == VA_True ? 1 : 0));
                             circ.var(vid).assignment = a;
                             break;   //skip out
                         }
                         else {
                             PINF("Deleting child falsified by constant propagation: " << child << " of " << vid);
+                            INTR("constDel " << vid << " " << child);
                             circ.deleteAt(c);
                             continue;
                         }
@@ -251,33 +268,47 @@ namespace preproq{
                         if(circ.isEnd(circ.next(grandc))) {
                             Literal grandchild = circ.get(grandc);
                             PINF("Eliminating singularity " << child << " by replacing it with " << grandchild);
+                            INTR("singularity " << vid << " " << child << " " << (child < 0 ? -grandchild : grandchild));
                             circ.set(c, child < 0 ? -grandchild : grandchild);
-                            continue;
+                            working = true;
                         }
                         //Gate Collapse
                         else if(cgtype == gtype && child > 0) {  //positive equal
                             PINF("Collapsing gate " << child << " into " << vid);
+                            INTR("gateCollapse " << vid << " " << child);
                             circ.set(c, circ.get(grandc));
                             grandc = circ.next(grandc);
                             while(!circ.isEnd(grandc)) {
                                 circ.addChild(vid, circ.get(grandc));
                                 grandc = circ.next(grandc);
                             }
+                            working = true;
                         }
                         else if(cgtype != gtype && child < 0) { //negative not equal
                             PINF("Collapsing gate " << child << " into " << vid);
+                            INTR("gateCollapse " << vid << " " << child);
                             circ.set(c, -circ.get(grandc));
                             grandc = circ.next(grandc);
                             while(!circ.isEnd(grandc)) {
                                 circ.addChild(vid, -circ.get(grandc));
                                 grandc = circ.next(grandc);
                             }
+                            working = true;
                         }
                     }
                 }
             }
             cleanupUsage();
-            working = localUnit();  //finally, apply local units which will determine whether a next iteration is needed
+            if(circ.var(VAR(circ.root)).assignment != VA_None && false){    //Assignment already known
+                PINF("Root was assigned, circuit result is known!");
+                break;
+            }
+            
+            working = localUnit() || working;  //finally, apply local units which will determine whether a next iteration is needed
+#ifdef DBG_MEM_DMP
+            std::fstream f(std::to_string(iteration) + ".memdmp", std::ios_base::out);
+            circ.memDump(f);
+#endif            
             PDBG("End of iteration");
             iteration++;
         }

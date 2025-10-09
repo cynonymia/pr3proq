@@ -53,6 +53,12 @@ extern int global_verbose;
     #define PTR(x) if(LOG_PTR)  do {std::cerr << GREY <<  "[PreProQ] [PTR] " << x << COLOR_RESET << std::endl; } while(0)
 #endif
 
+#ifdef TRACE_INTERFACE
+    #define INTR(x) do {std::cerr << x << std::endl;} while(0)
+#else
+    #define INTR(x)
+#endif
+
 //Prefixed Versions (PREFIX has to be defined)
 #define PERR(x) ERR(PREFIX << x)
 #define PINF(x) INF(PREFIX << x)

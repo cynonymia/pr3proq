@@ -12,3 +12,9 @@
 
 #define ERROR_IF(cond, msg) if(cond) { ERR(msg); return PREPROQ_ERROR;}
 #define PERROR_IF(cond, msg) if(cond) { PERR(msg); return PREPROQ_ERROR;}
+
+//if defined a trace of the operations applied will be called
+//#define TRACE_INTERFACE
+
+//if defined, dump the circuit in files after each iteration
+//#define DBG_MEM_DMP
