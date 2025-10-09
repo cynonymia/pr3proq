@@ -213,7 +213,6 @@ namespace preproq {
             return count;
         }
 
-
 #ifndef NDEBUG
         void memDump(std::ostream& out) {
             size_t cnt = 0;
@@ -236,7 +235,7 @@ namespace preproq {
                 cnt++;
             }
         }
-    };
 #endif
+    };
 
 }
