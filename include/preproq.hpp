@@ -7,6 +7,8 @@
 
 namespace preproq {
 
+    using Sig = unsigned long long; 
+    
     class PreProQ {
         Circuit& circ;
         std::vector<char> tagbuffer;
@@ -16,6 +18,7 @@ namespace preproq {
 
         void traceActive();
         bool localUnit();
+        void dagify();
 
         inline void resetTagBuffer() {
             while(!tagged.empty()) {
@@ -23,6 +26,18 @@ namespace preproq {
                 tagged.pop();
             }
         }
+
+        //a good hash function https://nullprogram.com/blog/2018/07/31/
+        unsigned prospector32(unsigned x)
+        {
+            x ^= x >> 15;
+            x *= 0x2c1b3c6dU;
+            x ^= x >> 12;
+            x *= 0x297a2d39U;
+            x ^= x >> 15;
+            return x;
+        }
+
 
         void cleanupUsage();
 

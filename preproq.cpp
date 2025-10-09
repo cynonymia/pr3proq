@@ -1,5 +1,6 @@
 #include <cassert>
 #include <fstream>
+#include <map>
 #include <stack>
 #include "preproq.hpp"
 #include "circuit.hpp"
@@ -151,7 +152,7 @@ namespace preproq{
                     while(remcnt--) {
                         INTR("localUnitUnlearn " << (Literal) (assigned.top() * (circ.var(assigned.top()).assignment == VA_True ? 1 : -1)));
                         circ.var(assigned.top()).assignment = VA_None;
-                        circ.var(assigned.top()).localMark = 1;
+                        circ.var(assigned.top()).localMark = 0;
                         PPTR("Forgetting " << assigned.top());
                         assigned.pop();                   
                     }
@@ -163,7 +164,7 @@ namespace preproq{
             //reset assignments, if any left
             while(!assigned.empty()) {
                 circ.var(assigned.top()).assignment = VA_None;
-                circ.var(assigned.top()).localMark = 1;
+                circ.var(assigned.top()).localMark = 0;
                 assigned.pop();
             }
             while(!localCount.empty())
@@ -173,6 +174,79 @@ namespace preproq{
         return reduced;        
     }
     #undef PREFIX
+
+
+    void PreProQ::dagify() {
+        DBG("Start with DAG-ification");
+        std::map<Sig, VarId> hashes;
+        std::map<VarId, VarId> aliases;
+
+        std::stack<VarId> visited;
+        
+        for(VarId vid = circ.gateBegin(); vid != circ.gateEnd(); vid++) {
+            if(!circ.var(vid).active())
+                continue;           
+            
+            if(circ.var(vid).assignment != VA_None)
+                continue;
+            
+            Sig cur = 0;
+            for(NodeChild c = circ.begin(vid); !circ.isEnd(c); c = circ.next(c)) {
+                Literal lit = circ.get(c);
+                auto it = aliases.find(VAR(lit));
+                if(it != aliases.end()) {
+                    circ.set(c, lit < 0 ? -it->second : it->second);
+                    INF("Replacing child " << lit << " in " << vid << " with alias " << circ.get(c));
+                }
+                
+                cur += prospector32(circ.get(c));
+            }
+            auto it = hashes.find(cur);
+
+            if(it != hashes.end() && (circ.var(vid).gtype == circ.var(it->second).gtype)) {
+                VarId other = it->second;
+                DBG("Found candidate: " << vid << " == " << other);
+
+                assert(visited.empty());
+                
+                int cnt = 0;
+                for(NodeChild c = circ.begin(vid); circ.isEnd(c); c = circ.next(c)) {
+                    Literal lit = circ.get(c);
+                    assert(!circ.var(VAR(lit)).localMark);  //sanity check
+                    circ.var(VAR(lit)).localMark = 1;
+                    visited.push(VAR(lit));
+                    cnt++;
+                }
+
+                for(NodeChild c = circ.begin(other); circ.isEnd(c); c = circ.next(c)) {
+                    Literal lit = circ.get(c);
+                    if(!circ.var(VAR(lit)).localMark) {
+                        DBG("Candidate failed with witness " << lit);
+                        break;
+                    }
+                    circ.var(VAR(lit)).localMark = 0;
+                    cnt--;                        
+                }
+                while(!visited.empty()) {
+                    if(circ.var(visited.top()).localMark) {
+                        cnt = 1;    //set s.t. it fails
+                        circ.var(visited.top()).localMark = 0;
+                    }
+                }
+                if(cnt == 0)
+                    aliases[vid] = other;
+                else {
+                    DBG("Hit with " << cur << " on two candidates " << vid << ", " << other);
+                }
+            }
+            else {
+                hashes[cur] = vid;
+                PTR("Registering " << vid << " = " << cur);
+            }
+        }
+        
+    }
+
     
     #define PREFIX "[Iteration:" << iteration << "] " 
     int PreProQ::run() {        
@@ -187,11 +261,12 @@ namespace preproq{
             working = false;
             INF("Start Iteration " << iteration);
 
+            
             //Pure Literal elimination
             for(VarId vid = circ.varBegin(); vid < circ.varEnd(); vid++) {                
                 if(circ.tseitin(vid)) break;
-
-                if(circ.var(vid).assignment == VA_None) //Ignore already assigned
+                
+                if(circ.var(vid).assignment != VA_None) //Ignore already assigned
                     continue;
                 
                 if(circ.var(vid).neg != circ.var(vid).pos) {
@@ -221,16 +296,8 @@ namespace preproq{
                 
                 unsigned char gtype = circ.var(vid).gtype & 0b11;
 
-                if(circ.isEnd(circ.begin(vid))) {
-                    //Empty gate => assign
-                    PINF("Found empty gate " << vid << " - assigning!");
-                    circ.var(vid).assignment = gtype == GT_And ? Assignment::VA_True : Assignment::VA_False;
-                    INTR("implicitConstant " << vid << " " << (gtype == GT_And ? 1 : 0));
-                    continue;
-                    //No additional working step => assignment will be propagated automatically as gates are ordered
-                }
                 resetTagBuffer();
-                
+
                 for(NodeChild c = circ.begin(vid); !circ.isEnd(c); c = circ.next(c)) {
                     Literal child = circ.get(c);
                     PPTR("Checking " << child << " of " << vid);
@@ -261,7 +328,7 @@ namespace preproq{
                         if(child < 0)
                             a = static_cast<Assignment>(SWITCH_ASSIGNMENT(a));
                         if((a == VA_True) == (gtype == GT_Or)) {
-                            PINF("Propagating constant from " << child << ": " << (a == VA_True ? "True" : "False"));
+                            PINF("Propagating constant from " << child << " in " << vid <<  ": " << (a == VA_True ? "True" : "False"));
                             INTR("constProp " << vid << " " << child << " " << (a == VA_True ? 1 : 0));
                             circ.var(vid).assignment = a;
                             break;   //skip out
@@ -314,9 +381,18 @@ namespace preproq{
                         }
                     }
                 }
+                //After eliminiation, check if empty
+                if(circ.isEnd(circ.begin(vid))) {
+                    //Empty gate => assign
+                    PINF("Found empty gate " << vid << " - assigning!");
+                    circ.var(vid).assignment = gtype == GT_And ? Assignment::VA_True : Assignment::VA_False;
+                    INTR("implicitConstant " << vid << " " << (gtype == GT_And ? 1 : 0));
+                    continue;
+                    //No additional working step => assignment will be propagated automatically as gates are ordered
+                }
             }
             cleanupUsage();
-            if(circ.var(VAR(circ.root)).assignment != VA_None && false){    //Assignment already known
+            if(circ.var(VAR(circ.root)).assignment != VA_None){    //Assignment already known
                 PINF("Root was assigned, circuit result is known!");
                 break;
             }
@@ -332,12 +408,13 @@ namespace preproq{
         while(working);
         int result = PREPROQ_OK;
         if(circ.var(VAR(circ.root)).assignment != VA_None) {
-            result = (circ.root > 0) == (circ.var(VAR(circ.root)).assignment == VA_True) ? PREPROQ_SAT : PREPROQ_UNSAT;        
+            result = (circ.root > 0) == (circ.var(VAR(circ.root)).assignment == VA_True) ? PREPROQ_SAT : PREPROQ_UNSAT;
             INF("Preprocessor was able to solve the circuit with result " << result);
         }
         else {
+            dagify();
             INF("Preprocessor finished without solving the circuit!");
-        }
+        }        
         return result;
     }
     
