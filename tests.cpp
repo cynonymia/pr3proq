@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <cstdio>
 #include <sstream>
 #include "circuit.hpp"
 #include "globals.hpp"
@@ -7,15 +8,15 @@
 #include "preproq.hpp"
 #include "writer.hpp"
 
-#define INPUT(x) std::stringstream input(x)
+#define INPUT(x) FILE* input = fmemopen((char*)x, strlen(x), "r")
 
-#define CIRCUIT(x) Circuit circ; do {INPUT(x); REQUIRE(qcir::parse_cleansed(input, circ) == PREPROQ_OK); } while(0)
+#define CIRCUIT(x) Circuit circ; do {INPUT(x); REQUIRE(qcir::parse(input, circ) == PREPROQ_OK); fclose(input);} while(0)
 
 using namespace preproq;
 
 #define PREFIX "[Test] "
 
-TEST_CASE("Simple parse cleansed", "[QCIR]"){
+TEST_CASE("Simple parse cleansed", "[QCIR]"){    
   CIRCUIT("#QCIR-14\n" "forall(1)\n" "exists(2)\n" "output(-5)\n" "3 = or(1, 2)\n" "4 = or(-1, -2)\n" "5 = and(3, 4)\n");
 
   REQUIRE(circ.varSize() == 5);  

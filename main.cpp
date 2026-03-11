@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <fstream>
 #include "logging.hpp"
 #include "circuit.hpp"
@@ -14,26 +15,21 @@ int main(int argc, char** argv){
         return PREPROQ_OK;
     }
 
-    std::fstream input(argv[1], std::ios_base::in);
-
-    bool cleansed = argc >= 3 && (std::string(argv[2]) == "--cleansed");
+    FILE* fp = fopen(argv[1], "r");
     
-    ERROR_IF(!input.good(), "Input file " << argv[1] << " was not good!");
+    ERROR_IF(fp == nullptr, "Input file " << argv[1] << " was not good!");
 
     Circuit circ;
-    if(cleansed) {
-        ERROR_IF(qcir::parse_cleansed(input, circ, argv[1]) != PREPROQ_OK, "Parser exited with errors!");
-    }
-    else {
-        ERROR_IF(qcir::parse(input, circ, argv[1]) != PREPROQ_OK, "Parser exited with errors!");
-    }
 
+    ERROR_IF(qcir::parse(fp, circ, argv[1]) != PREPROQ_OK, "Parser exited with errors!");
+
+    fclose(fp);
+   
     PreProQ proq(circ);
-    
     int result = proq.run();
 
     if(result == PREPROQ_OK)
-        writeQcir(std::cout, circ);        
-    
+        writeQcir(std::cout, circ);         
+
     return result;
 }

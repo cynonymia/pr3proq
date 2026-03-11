@@ -1,216 +1,278 @@
 #include <compare>
+#include <boost/unordered/unordered_flat_map.hpp>
+#include "qcir_keywords.hpp"
 #include "circuit.hpp"
 #include "globals.hpp"
 #include "logging.hpp"
 #include "qcir.hpp"
-#include "serializer.hpp"
 
 namespace preproq::qcir {
 
 #define PREFIX "[QCIR at " << target << ":" << line << ":" << col << "] "    
 
 #define EXPECT(ex) do { PERROR_IF(cur != ex, "Expected " << ex << " but instead got " << cur) else next(); } while(0)
-    
-    class CleansedParser {
-        std::istream& inp;
-        std::string target;
+
+class FastString {
+    char* buffer;
+    size_t ptr = 0;
+    size_t capacity = 0;
+
+public:
+    FastString(size_t initial_capacity) : capacity(initial_capacity) {
+        buffer = static_cast<char*>(malloc(initial_capacity * sizeof(char)));
+    }
+    ~FastString() {
+        free(buffer);
+    }
+
+    void push_back(char c) {
+        if(ptr >= capacity) {
+            capacity *= 2;
+            buffer = static_cast<char*>(realloc(buffer, capacity * sizeof(char)));
+        }
+        buffer[ptr++] = c;
+    }
+
+    void finish() {
+        buffer[ptr] = 0;
+    }
+
+    inline size_t size() {
+        return ptr;
+    }
+
+    void clear() {
+        ptr = 0;
+    }
+
+    inline char* internal() {
+        return buffer;
+    }
+
+};
+
+class QcirParser {
+        
+        FILE* inp;
         Circuit& circ;
+        std::string target;
         size_t line = 1;
         size_t col = 0;
         int cur = 0;
 
         VarId nextVar = 1;
-        std::vector<Literal> translator;
+        boost::unordered_flat_map<std::string, VarId> translator;
         
-        std::string buffer;
+        std::string outputName;
+        bool outputNeg = false;
+
+        FastString buffer;
 
 
-        VarId registerVar(VarId vid) {
-            if(translator.size() <= vid) {
-                translator.resize(vid+1, 0);
-            }
+        VarId registerVar() {            
             VarId nvid = nextVar++;
-            translator[vid] = nvid;
-            PPTR("Register " << vid << " -> " << nvid);
+            translator[buffer.internal()] = nvid;
+            PPTR("Register " << buffer.internal() << " -> " << nvid);
             return nvid;
         }
         
         bool isEof() {return cur == EOF;}
         
-        void next() {
-            if(isEof())
-                return;
-            do {
-                cur = inp.get();
+        inline void next_unchecked() {
+            cur = fgetc_unlocked(inp);
+            if(cur == '\n') {
+                col = 0; 
+                line++;
+            }
+            else
                 col++;
-                if(cur== '\n') {
-                    line++;
-                    col = 0;
-                }
-            }
-            while(isWhiteSpace());
         }
 
-        inline bool isNumber() {
-            return cur >= '0' && cur <= '9';
+        inline void next() {
+            if(isEof()) return;
+            next_unchecked();
         }
-
-        unsigned readNumber() {
-            unsigned n = 0;
-            while(!isEof() && isNumber()) {
-                n = n * 10 + cur - '0';
-                next();
-            }
-            return n;
-        }        
-
-        inline bool isInteger() {
-            return isNumber() || cur == '-';
-        }
-
-        int readInteger() {
-            bool neg = cur == '-';
-            if(neg) next();
-            int n = readNumber();
-            return neg ? -n : n;
-        }
-
-        inline bool isText() {
-            return (cur >= 'A' && cur <= 'Z')
-                || (cur >= 'a' && cur <= 'z');
-        }
-
-        void readText() {
-            buffer.clear();
-            while(!isEof() && isText()) {
-                buffer += static_cast<char>(cur);
-                next();
-            }            
-        }
-
+       
         inline int isKeyword() {
-            Keyword* k = QcirKeywords::isKeyword(buffer.c_str(), buffer.size());
+            Keyword* k = QcirKeywords::isKeyword(buffer.internal(), buffer.size());
             return !k ? 0 : k->id;
         }
 
-        inline bool isWhiteSpace() {
-            return cur == ' ' || cur == '\t';
+        inline bool isFuzzyAlphaNum() {
+            return (cur >= '0') && (cur <= 'z') && (cur != '=');
         }
 
-        void skipNewlines() {
-            while(!isEof() && (cur == '\r' || cur == '\n'))
-                next();
-        }
-
-        int parseFormatId() {
-             
-            if(cur == '#') {
+        void skipComments() {
+            while(cur == '#') {
                 PPTR("Skipping comment");
-                while(!isEof() && cur != '\n')
-                    next();
-                skipNewlines();
+                while(!isEof() && (cur != '\n'))
+                    next_unchecked();
+                PPTR("Comment skipped");
+                next_unchecked();
             }
-            return !isEof() ? PREPROQ_OK : PREPROQ_ERROR;
         }
 
-        int parseQVars(QType qtype) {
-            EXPECT('(');
-            while(!isEof()) {
-                int n = readNumber();
-                n = registerVar(n);
-                circ.addVar(n, qtype);
-                if(cur == ',')
-                    next();
-                else
-                    break;
+        inline void skipwhitespace() {
+            while(cur == ' ')
+                next_unchecked();            
+        }
+
+        inline void skipNewline() {
+            while(cur == '\r' || cur == '\n')
+                next_unchecked();
+        }
+
+        void readVar() {
+            buffer.clear();
+            while(!isEof() && isFuzzyAlphaNum()) { 
+                buffer.push_back(cur);
+                next_unchecked();
             }
-            EXPECT(')');
-            skipNewlines();
-            return PREPROQ_OK;
+            buffer.finish();
         }
 
         int parseOutput() {
-            EXPECT('(');
-            ERROR_IF(!isInteger(), "Expected numerical value for output");
-            circ.root = readInteger();
-            EXPECT(')');
-            skipNewlines();
-            return PREPROQ_OK;
-        }
+            if(cur != '(') {
+                PERR("Expected '(' after output definition, but got " << cur);
+                return PREPROQ_ERROR;
+            }      
+            next_unchecked();
 
-        int parseQBlocks() { 
-            while(!isEof()) {
-                if(!isText())
-                    return PREPROQ_OK;
-                readText();
-                int keywordId = isKeyword();
-                QType qtype = Free;
-                if(keywordId == QCIR_KW_FORALL) 
-                    qtype = Forall;
-                else if(keywordId == QCIR_KW_EXISTS)
-                    qtype = Exists;
-                else if(keywordId == QCIR_KW_OUTPUT) {
-                    return parseOutput();
-                }                
-                else {
-                    PERR("Violation of cleansed form: Unexpected "
-                         << (keywordId == 0 ? "" : "key") << "word encountered: "
-                         << buffer << ", expected 'forall' or 'exists'");
-                    return PREPROQ_ERROR;
-                }
-                if(parseQVars(qtype) != PREPROQ_OK)
-                    return PREPROQ_ERROR;                
+            outputName.clear();
+            outputNeg = cur == '-';
+            if(outputNeg)
+                next_unchecked();
+            
+            while(!isEof() && isFuzzyAlphaNum()) { 
+                outputName.push_back(cur);
+                next_unchecked();
             }
-            return PREPROQ_OK;
-        }
+            PDBG("Read output as " << outputName);
 
-        int parseGateChildren(VarId vid) {
-            EXPECT('(');
-            while(!isEof() && isInteger()) {
-                int n = readInteger();
-                assert(translator[abs(n)] != 0);
-                n = n < 0 ? -translator[-n] : translator[n];
-                circ.pushBackChild(n);
-                if(cur == ',')
-                    next();
-                else
-                    break;
+            if(cur != ')') {
+                PERR("Expected ')' after output definition, but got " << cur);
+                return PREPROQ_ERROR;
             }
-            EXPECT(')');
-            skipNewlines();
+            next_unchecked();
+            skipwhitespace();
+            skipNewline();
             return PREPROQ_OK;
         }
         
-        int parseGates() {
+        int parseQBlocks() {
+            PPTR("Start reading QBlocks");
             while(!isEof()) {
-                if(!isNumber())
-                    return PREPROQ_OK;
-                VarId vid = readNumber();
-                vid = registerVar(vid);
-                EXPECT('=');
-                PERROR_IF(!isText(), "Expecting gate modifier at this point");
-                readText();
-                int keywordId = isKeyword();
-                GType gtype = GT_Or;
-                if(keywordId == QCIR_KW_OR) {
-                    //Already set
-                }
-                else if(keywordId == QCIR_KW_AND) {
-                    gtype = GT_And;
-                }
-                else if(keywordId == QCIR_KW_ITE || keywordId == QCIR_KW_XOR) {
-                    PERR("Violation of cleansed form: ITE and XOR gates are not supported!");
+                readVar();
+                PPTR("Read keyword: " << buffer.internal());
+                QType qtype = Free;
+                switch (isKeyword())
+                {
+                case QCIR_KW_FORALL: qtype = Forall; break;
+                case QCIR_KW_EXISTS: qtype = Exists; break;
+                case QCIR_KW_FREE:   qtype = Free;   break;        
+                case QCIR_KW_OUTPUT: return parseOutput();
+                default:
+                    PERR("Violation of cleansed form! Unexpected word encountered: "
+                        << buffer.internal() << buffer.size()  << ", expected 'forall' or 'exists'");
                     return PREPROQ_ERROR;
                 }
-                else {
-                    PERR("Expected AND or OR, instead got " << buffer);
+                skipwhitespace();
+                PPTR("Start Quantifier block of type " << (int)qtype);
+                if(cur != '(') {
+                    PERR("Expected '(' after quantifier definition, but got " << WRITE_CHAR(cur));
+                    return PREPROQ_ERROR;
+                }            
+                do {
+                    next_unchecked();
+                    skipwhitespace();
+
+                    readVar();
+                    VarId vid = registerVar();
+                    circ.addVar(vid, qtype);
+                    skipwhitespace();
+                }
+                while(cur == ',');
+                if(cur != ')') {
+                    PERR("Expected ')' after quantifier var definition, but got " << WRITE_CHAR(cur));
+                    return PREPROQ_ERROR;
+                }
+                next_unchecked();
+                skipwhitespace();
+                skipNewline();
+            }
+            return PREPROQ_OK;
+        }
+
+        int parseGates() {
+            while(!isEof()) {
+                readVar();
+                VarId vid = registerVar();
+                skipwhitespace();
+                if(cur != '=')  {
+                    PERR("Expected '=' after gate variable definition!");
+                    return PREPROQ_ERROR;
+                }
+                next_unchecked();
+
+                skipwhitespace();
+                readVar();
+                GType gtype = GT_Or;
+                switch (isKeyword())
+                {
+                case QCIR_KW_OR:  gtype = GT_Or;  break;
+                case QCIR_KW_AND: gtype = GT_And; break;
+                
+                case QCIR_KW_ITE:    case QCIR_KW_XOR: 
+                case QCIR_KW_EXISTS: case QCIR_KW_FORALL:
+                    PERR("Currently, only AND and OR gates are allowed (cleansed QCIR)");
+                    return PREPROQ_ERROR;
+
+                default:
+                    PERR("Expected gate identifier but got " << buffer.internal());
                     return PREPROQ_ERROR;
                 }
 
+                PPTR("Defining gate " << vid << " type " << (int)gtype);
+
                 circ.addGate(vid, gtype);
+
+                skipwhitespace();
                 
-                if(parseGateChildren(vid) == PREPROQ_ERROR)
-                    return PREPROQ_ERROR;                
+                if(cur != '(') {
+                    PERR("Expected '(' after gate type identifier, but got " << cur);
+                    return PREPROQ_ERROR;
+                }
+
+                next_unchecked();
+                skipwhitespace();
+                
+                while(cur != ')') {                    
+                    bool neg = cur == '-';
+                    if(neg)
+                        next_unchecked();
+                    readVar();
+                    auto it = translator.find(buffer.internal());
+                    if(it == translator.end()) {
+                        PERR("Referencing variable " << buffer.internal() << " which is unknown at this point!");
+                        return PREPROQ_ERROR;
+                    }
+                    circ.pushBackChild(neg ? -((Literal)it->second) : (Literal)it->second);
+                    skipwhitespace();                    
+                    if(cur == ',') {
+                        next_unchecked();
+                        skipwhitespace();
+                    }
+                    else {
+                        break;
+                    }
+                }
+                if(cur != ')') {
+                    PERR("Expected ')' after gate children definition, but got " << cur);
+                    return PREPROQ_ERROR;
+                }  
+                next_unchecked();
+                skipwhitespace();
+                skipNewline();                
             }
             return PREPROQ_OK;
         }
@@ -218,13 +280,12 @@ namespace preproq::qcir {
         
     public:
 
-        CleansedParser(std::istream& inp, Circuit& circ, std::string target) : inp(inp), circ(circ), target(target) {
+        QcirParser(FILE* inp, Circuit& circ, std::string target) : inp(inp), circ(circ), target(target), buffer(32) {
             next();
         }
         
         int parse() {
-            PERROR_IF(parseFormatId() == PREPROQ_ERROR,
-                  "Encountered EOF during traversing comments");
+            skipComments(); 
 
             if(parseQBlocks() == PREPROQ_ERROR)
                 return PREPROQ_ERROR;
@@ -234,24 +295,24 @@ namespace preproq::qcir {
 
             assert(isEof());            
 
-            circ.root = circ.root < 0? -translator[VAR(circ.root)] : translator[VAR(circ.root)];
-            assert(circ.root != 0);
-            
+            auto it = translator.find(outputName);
+            if(it == translator.end()) {
+                PERR("Unmapped output symbol '" << outputName << "'");
+                return PREPROQ_ERROR;
+            }
+
+            circ.root = outputNeg ? -it->second : it->second;            
+            PDBG("Mapped back output to " << circ.root);
             return PREPROQ_OK;
         }
         
     };
 
-  
-    int parse_cleansed(std::istream& input, Circuit& circ, std::string target) {
-        CleansedParser p(input, circ, target);
+    int parse(FILE* input, Circuit& circ, std::string target) {
+        QcirParser p(input, circ, target);
         return p.parse();        
     }
 
 #undef PREFIX
 
-    int parse(std::istream& input, Circuit& circ, std::string target) {
-        QcirSerializer qser(input, circ, target);
-        return qser.stream();
-    }
 }
