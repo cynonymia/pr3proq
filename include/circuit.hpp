@@ -7,6 +7,10 @@
 
 namespace preproq {
 
+#define TRUE_QCIR "#QCIR-14\nexists(1)\noutput(2)\n2 = or(1, -1)\n"
+#define FALSE_QCIR "#QCIR-14\nexists(1)\noutput(2)\n2 = and(1, -1)\n"
+
+    
 #define VAR(x) abs(x)
     
     using VarId = unsigned;

@@ -97,7 +97,13 @@ int main(int argc, const char** argv){
     int result = proq.run();
 
     if(result == PREPROQ_OK)
-        writeQcir(std::cout, circ);         
+        writeQcir(std::cout, circ);
+    else if(result == PREPROQ_SAT)
+        std::cout << TRUE_QCIR;
+    else if(result == PREPROQ_UNSAT)
+        std::cout << FALSE_QCIR;
+        
+    
 
     return result;
 }
