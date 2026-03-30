@@ -8,6 +8,11 @@
 namespace preproq {
 
     using Sig = unsigned long long; 
+
+    struct PreProQOptions {
+        const char* target_file = nullptr;
+        bool use_dagification:1 = false;
+    };
     
     class PreProQ {
         Circuit& circ;
@@ -42,6 +47,8 @@ namespace preproq {
         void cleanupUsage();
 
     public:
+        PreProQOptions options;
+        
         PreProQ(Circuit& circ) : circ(circ) {
             INF("Initializing");
             tagbuffer.resize(circ.varSize()+1);

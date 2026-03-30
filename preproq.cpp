@@ -412,7 +412,8 @@ namespace preproq{
             INF("Preprocessor was able to solve the circuit with result " << result);
         }
         else {
-            dagify();
+            if(options.use_dagification)
+                dagify();
             INF("Preprocessor finished without solving the circuit!");
         }        
         return result;
