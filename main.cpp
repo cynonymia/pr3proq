@@ -25,7 +25,7 @@ static void printHelp() {
     WRITELN("  --debug              increases verbosity level to \"debug\"");
     WRITELN("  --plevel             increases verbosity level to \"pointer level\"");
 #endif
-    WRITELN(" --dagify              exploiting DAG property by re-evaluating gate references");
+    WRITELN("  --dagify             exploiting DAG property by re-evaluating gate references");
 }
 
 static int parseArgs(int argc, const char** argv, PreProQOptions& options) {
@@ -68,8 +68,15 @@ static int parseArgs(int argc, const char** argv, PreProQOptions& options) {
 int main(int argc, const char** argv){    
 
     PreProQOptions opt;
-    ERROR_IF(!parseArgs(argc, argv, opt), "Parsing command line arguments failed!");
+    int argparseRes = parseArgs(argc, argv, opt);    
+    if(argparseRes == ARGS_HELP) {
+        printHelp();
+        return PREPROQ_OK;
+    }
+    else if(argparseRes != PREPROQ_OK)
+        return argparseRes;  
 
+    
     if(opt.target_file == nullptr) {
         DBG("No input file specified, using stdin");
         opt.target_file = "/dev/stdin";
