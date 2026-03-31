@@ -26,6 +26,7 @@ static void printHelp() {
     WRITELN("  --plevel             increases verbosity level to \"pointer level\"");
 #endif
     WRITELN("  --dagify             exploiting DAG property by re-evaluating gate references");
+    WRITELN("  --qdimacs-out        exports the resulting formula into QDIMACS");
 }
 
 static int parseArgs(int argc, const char** argv, PreProQOptions& options) {
@@ -49,7 +50,10 @@ static int parseArgs(int argc, const char** argv, PreProQOptions& options) {
 #endif
         else if(CSTR_EQUAL(argv[i], "--dagify")) {
             options.use_dagification = true;
-        }        
+        }
+        else if(CSTR_EQUAL(argv[i], "--qdimacs-out")) {
+            options.qdimacs_out = true;
+        }
         else if(!options.target_file){
             if(CSTR_EQUAL(argv[i], "-"))
                 options.target_file = "/dev/stdin";
@@ -96,14 +100,24 @@ int main(int argc, const char** argv){
     proq.options = opt;
     int result = proq.run();
 
-    if(result == PREPROQ_OK)
-        writeQcir(std::cout, circ);
-    else if(result == PREPROQ_SAT)
-        std::cout << TRUE_QCIR;
-    else if(result == PREPROQ_UNSAT)
-        std::cout << FALSE_QCIR;
-        
-    
+    if(result == PREPROQ_OK){
+        if(opt.qdimacs_out)
+            writeQdimacs(std::cout, circ);
+        else
+            writeQcir(std::cout, circ);
+    }
+    else if(result == PREPROQ_SAT) {
+        if(opt.qdimacs_out)
+            std::cout << TRUE_QDIMACS;
+        else
+            std::cout << TRUE_QCIR;
+    }
+    else if(result == PREPROQ_UNSAT) {
+        if(opt.qdimacs_out)
+            std::cout << FALSE_QDIMACS;
+        else
+            std::cout << FALSE_QCIR;
+    }
 
     return result;
 }

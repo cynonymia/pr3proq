@@ -1,4 +1,6 @@
 #include "writer.hpp"
+#include "circuit.hpp"
+#include "preproq.hpp"
 
 namespace preproq {
 
@@ -46,18 +48,92 @@ namespace preproq {
         }
     }
 
+    static const char* qtype_to_str(QType qt) {
+        switch(qt) {
+        case preproq::QType::Exists: return "e";
+        case preproq::QType::Forall: return "a";
+        case preproq::QType::Tseitin: return "e";
+        default: return "?";
+        }
+    }
+
     static size_t precalculate(Circuit& circ) {
         size_t count = 0;
         for(VarId vid = circ.gateBegin(); vid < circ.gateEnd(); vid++) {
             GType gt = static_cast<GType>(circ.var(vid).gtype);
             if(gt == GT_And) {
-
+                if(circ.var(vid).pos)
+                    count += circ.calculateChildrenCount(vid);
+                if(circ.var(vid).neg)
+                    count += 1;
             }
+            else if(gt == GT_Or) {
+                if(circ.var(vid).pos)
+                    count += 1;
+                if(circ.var(vid).neg)
+                    count += circ.calculateChildrenCount(vid);
+            }            
         }
+        count += 1; //output literal
         return count;
     }
 
     void writeQdimacs(std::ostream& out, Circuit& circ) {
-        out << "p cnf " << circ.varEnd() << " " << 1;
+        out << "p cnf " << circ.varEnd() << " " << precalculate(circ);
+
+        QType qcur = QType::Free;
+        //Prefix
+        for(VarId vid = circ.varBegin(); vid < circ.varEnd(); vid++) {
+            if(circ.var(vid).qtype != qcur) {               
+                if(qcur != QType::Free)
+                    out << " 0";
+                qcur = static_cast<QType>(circ.var(vid).qtype);
+                out << std::endl;
+                out << qtype_to_str(qcur);
+            }
+            out << " " << vid;
+        }
+        if (qcur != QType::Free)
+            out << " 0" << std::endl;
+
+        std::vector<Literal> clause;
+        //Matrix
+        for(VarId vid = circ.gateBegin(); vid < circ.gateEnd(); vid++) {
+            GType gt = static_cast<GType>(circ.var(vid).gtype);
+
+            clause.clear();
+            for(NodeChild c = circ.begin(vid); !circ.isEnd(c); c = circ.next(c))
+                clause.push_back(circ.get(c));           
+            
+            if(gt == GT_And) {
+                if(circ.var(vid).pos) {
+                    for(Literal c : clause) {
+                        out << -static_cast<int>(vid) << " " << c << " 0" << std::endl;
+                    }
+                }
+                if(circ.var(vid).neg) {
+                    out << vid << " ";
+                    for(Literal c : clause) {
+                        out << -c << " ";
+                    }
+                    out << "0" << std::endl;                    
+                }
+            }
+            else if(gt == GT_Or) {
+                if(circ.var(vid).pos){
+                    out << -static_cast<int>(vid) << " ";
+                    for(Literal c : clause) {
+                        out << c << " ";
+                    }
+                    out << "0" << std::endl;                    
+                }
+                if(circ.var(vid).neg){
+                    for(Literal c : clause) {
+                        out << vid << " " << -c << " 0" << std::endl;
+                    }
+                }
+            }            
+        }
+        out << circ.root << " 0" << std::endl;
     }
 }

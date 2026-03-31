@@ -10,6 +10,9 @@ namespace preproq {
 #define TRUE_QCIR "#QCIR-14\nexists(1)\noutput(2)\n2 = or(1, -1)\n"
 #define FALSE_QCIR "#QCIR-14\nexists(1)\noutput(2)\n2 = and(1, -1)\n"
 
+#define TRUE_QDIMACS "p cnf 0 0\n"
+#define FALSE_QDIMACS "p cnf 0 1\n0\n"
+    
     
 #define VAR(x) abs(x)
     

@@ -12,6 +12,7 @@ namespace preproq {
     struct PreProQOptions {
         const char* target_file = nullptr;
         bool use_dagification:1 = false;
+        bool qdimacs_out:1 = false;
     };
     
     class PreProQ {
