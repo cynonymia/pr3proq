@@ -211,7 +211,7 @@ namespace preproq {
 
         inline size_t calculateChildrenCount(VarId vid) {
             if(!tseitin(vid)) return 0;
-            NodeChild n = var(vid).head;
+            NodeChild n = begin(vid);
             size_t count = 0;
             while(!isEnd(n)) {
                 count++;

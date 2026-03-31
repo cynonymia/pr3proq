@@ -83,7 +83,7 @@ namespace preproq {
     }
 
     void writeQdimacs(std::ostream& out, Circuit& circ) {
-        out << "p cnf " << circ.varEnd() << " " << precalculate(circ);
+        out << "p cnf " << circ.varEnd()-1 << " " << precalculate(circ);
 
         QType qcur = QType::Free;
         //Prefix
