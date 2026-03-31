@@ -101,8 +101,10 @@ int main(int argc, const char** argv){
     int result = proq.run();
 
     if(result == PREPROQ_OK){
-        if(opt.qdimacs_out)
+        if(opt.qdimacs_out) {
+            proq.cleanupUsage();
             writeQdimacs(std::cout, circ);
+        }
         else
             writeQcir(std::cout, circ);
     }

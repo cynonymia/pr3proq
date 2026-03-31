@@ -5,3 +5,5 @@ build
 .\#*
 compile_commands.json
 .dir-locals.el
+devtools
+release

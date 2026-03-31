@@ -101,6 +101,9 @@ namespace preproq {
         for(VarId vid = circ.gateBegin(); vid < circ.gateEnd(); vid++) {
             GType gt = static_cast<GType>(circ.var(vid).gtype);
 
+            if(!circ.var(vid).active())
+                continue;
+                
             clause.clear();
             for(NodeChild c = circ.begin(vid); !circ.isEnd(c); c = circ.next(c))
                 clause.push_back(circ.get(c));           

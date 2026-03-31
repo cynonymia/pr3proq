@@ -44,9 +44,6 @@ namespace preproq {
             return x;
         }
 
-
-        void cleanupUsage();
-
     public:
         PreProQOptions options;
         
@@ -57,6 +54,7 @@ namespace preproq {
             traceActive();
         }
 
+        void cleanupUsage();
         int run();
     };
 

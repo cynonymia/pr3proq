@@ -10,40 +10,26 @@ namespace preproq{
 
     void PreProQ::traceActive() {
         DBG("Tracing active gates");
-        std::stack<Literal> iteration;
-        iteration.push(circ.root);
         if(circ.root < 0)
             circ.var(-circ.root).neg = 1;
         else
             circ.var(circ.root).pos = 1;
 
-        while(iteration.size() > 0) {            
-            Literal lit = iteration.top();
-            PTR("Taking " << lit << " from iteration stack");
-            VarId vid = VAR(lit);
-            assert(circ.var(vid).active());
-            iteration.pop();
-            if(circ.var(vid).color == curColor) { //skip already visited
-                PTR("Already processed, skip");
+        for(VarId vid = VAR(circ.root); vid >= circ.gateBegin(); vid--) {
+            if(!circ.var(vid).active())
                 continue;
-            }
-            circ.var(vid).color = curColor;
+
             for(NodeChild c = circ.begin(vid); !circ.isEnd(c); c = circ.next(c)) {
-                Literal cl = circ.get(c);
-                GateVar& var = circ.var(VAR(cl));
-                PTR("Child " << cl <<"(" << c <<")");
-
+                Literal lit = circ.get(c);
+                GateVar& var = circ.var(VAR(lit));
+                PTR("Child " << lit <<"(" << c <<")");
+                
                 var.dag = var.pos || var.neg; //if already set, multiple references are made to this variable
-                var.pos = var.pos || ((cl > 0) && circ.var(vid).pos) || ((cl < 0) && circ.var(vid).neg);                
-                var.neg = var.neg || ((cl < 0) && circ.var(vid).pos) || ((cl > 0) && circ.var(vid).neg);            
+                var.pos = var.pos || ((lit > 0) && circ.var(vid).pos) || ((lit < 0) && circ.var(vid).neg);                
+                var.neg = var.neg || ((lit < 0) && circ.var(vid).pos) || ((lit > 0) && circ.var(vid).neg);            
 
-                if(circ.tseitin(VAR(cl))) {
-                    PTR("Push " << cl << " to iteration stack");
-                    iteration.push(cl);
-                }
-            }
+            }            
         }
-        curColor = SWITCH_COLOR(curColor);
     }
 
     void PreProQ::cleanupUsage() {
@@ -53,7 +39,7 @@ namespace preproq{
             circ.var(vid).pos = 0;
             circ.var(vid).dag = 0;
         }        
-        std::stack<Literal> iteration;
+        
         traceActive();
     }    
 
