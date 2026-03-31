@@ -61,6 +61,10 @@ namespace preproq {
         size_t count = 0;
         for(VarId vid = circ.gateBegin(); vid < circ.gateEnd(); vid++) {
             GType gt = static_cast<GType>(circ.var(vid).gtype);
+
+            if(!circ.var(vid).active())
+                continue;
+
             if(gt == GT_And) {
                 if(circ.var(vid).pos)
                     count += circ.calculateChildrenCount(vid);
