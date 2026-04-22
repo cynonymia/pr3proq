@@ -12,47 +12,46 @@ namespace preproq::qcir {
 
 #define EXPECT(ex) do { PERROR_IF(cur != ex, "Expected " << ex << " but instead got " << cur) else next(); } while(0)
 
-class FastString {
-    char* buffer;
-    size_t ptr = 0;
-    size_t capacity = 0;
+    class FastString {
+        char* buffer;
+        size_t ptr = 0;
+        size_t capacity = 0;
 
-public:
-    FastString(size_t initial_capacity) : capacity(initial_capacity) {
-        buffer = static_cast<char*>(malloc(initial_capacity * sizeof(char)));
-    }
-    ~FastString() {
-        free(buffer);
-    }
-
-    void push_back(char c) {
-        if(ptr >= capacity) {
-            capacity *= 2;
-            buffer = static_cast<char*>(realloc(buffer, capacity * sizeof(char)));
+    public:
+        FastString(size_t initial_capacity) : capacity(initial_capacity) {
+            buffer = static_cast<char*>(malloc(initial_capacity * sizeof(char)));
         }
-        buffer[ptr++] = c;
-    }
+        ~FastString() {
+            free(buffer);
+        }
 
-    void finish() {
-        buffer[ptr] = 0;
-    }
+        void push_back(char c) {
+            if(ptr >= capacity) {
+                capacity *= 2;
+                buffer = static_cast<char*>(realloc(buffer, capacity * sizeof(char)));
+            }
+            buffer[ptr++] = c;
+        }
 
-    inline size_t size() {
-        return ptr;
-    }
+        void finish() {
+            buffer[ptr] = 0;
+        }
 
-    void clear() {
-        ptr = 0;
-    }
+        inline size_t size() {
+            return ptr;
+        }
 
-    inline char* internal() {
-        return buffer;
-    }
+        void clear() {
+            ptr = 0;
+        }
 
-};
+        inline char* internal() {
+            return buffer;
+        }
 
-class QcirParser {
-        
+    };
+
+    class QcirParser {
         FILE* inp;
         Circuit& circ;
         std::string target;
@@ -166,16 +165,16 @@ class QcirParser {
                 PPTR("Read keyword: " << buffer.internal());
                 QType qtype = Free;
                 switch (isKeyword())
-                {
-                case QCIR_KW_FORALL: qtype = Forall; break;
-                case QCIR_KW_EXISTS: qtype = Exists; break;
-                case QCIR_KW_FREE:   qtype = Free;   break;        
-                case QCIR_KW_OUTPUT: return parseOutput();
-                default:
-                    PERR("Violation of cleansed form! Unexpected word encountered: "
-                        << buffer.internal() << buffer.size()  << ", expected 'forall' or 'exists'");
-                    return PREPROQ_ERROR;
-                }
+                    {
+                    case QCIR_KW_FORALL: qtype = Forall; break;
+                    case QCIR_KW_EXISTS: qtype = Exists; break;
+                    case QCIR_KW_FREE:   qtype = Free;   break;        
+                    case QCIR_KW_OUTPUT: return parseOutput();
+                    default:
+                        PERR("Violation of cleansed form! Unexpected word encountered: "
+                             << buffer.internal() << buffer.size()  << ", expected 'forall' or 'exists'");
+                        return PREPROQ_ERROR;
+                    }
                 skipwhitespace();
                 PPTR("Start Quantifier block of type " << (int)qtype);
                 if(cur != '(') {
@@ -218,19 +217,19 @@ class QcirParser {
                 readVar();
                 GType gtype = GT_Or;
                 switch (isKeyword())
-                {
-                case QCIR_KW_OR:  gtype = GT_Or;  break;
-                case QCIR_KW_AND: gtype = GT_And; break;
+                    {
+                    case QCIR_KW_OR:  gtype = GT_Or;  break;
+                    case QCIR_KW_AND: gtype = GT_And; break;
                 
-                case QCIR_KW_ITE:    case QCIR_KW_XOR: 
-                case QCIR_KW_EXISTS: case QCIR_KW_FORALL:
-                    PERR("Currently, only AND and OR gates are allowed (cleansed QCIR)");
-                    return PREPROQ_ERROR;
+                    case QCIR_KW_ITE:    case QCIR_KW_XOR: 
+                    case QCIR_KW_EXISTS: case QCIR_KW_FORALL:
+                        PERR("Currently, only AND and OR gates are allowed (cleansed QCIR)");
+                        return PREPROQ_ERROR;
 
-                default:
-                    PERR("Expected gate identifier but got " << buffer.internal());
-                    return PREPROQ_ERROR;
-                }
+                    default:
+                        PERR("Expected gate identifier but got " << buffer.internal());
+                        return PREPROQ_ERROR;
+                    }
 
                 PPTR("Defining gate " << vid << " type " << (int)gtype);
 
