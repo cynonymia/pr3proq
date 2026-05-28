@@ -16,13 +16,13 @@ To build pr3proq, execute the following commands:
 
 ```
 mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake -DCMAKE_BUILD_TYPE=Release .. 
 make -j
 ```
 
 Or, alternatively, for the debug version granting access to full verbose output:
 ```
 mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Debug
+cmake -DCMAKE_BUILD_TYPE=Debug .. 
 make -j
 ```
