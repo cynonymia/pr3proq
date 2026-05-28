@@ -8,3 +8,21 @@ PreProQ (**Pre-Pro**cessor for **Q**CIRs) was first introduced by [Peyrer et al]
 * New optional technique: DAG-ification (eliminate duplicate gates by exploiting the DAG structure of QCIR)
 
 This project is available and commonly updated at [https://github.com/cynonymia/pr3proq](https://github.com/cynonymia/pr3proq). Stable versions and major releases can in addition be found at [www.doi.org/10.5281/zenodo.20303639](www.doi.org/10.5281/zenodo.20303639)
+
+
+## Setup
+
+To build pr3proq, execute the following commands:
+
+```
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j
+```
+
+Or, alternatively, for the debug version granting access to full verbose output:
+```
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Debug
+make -j
+```

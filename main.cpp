@@ -30,6 +30,11 @@ static void printHelp() {
 }
 
 static int parseArgs(int argc, const char** argv, PreProQOptions& options) {
+    if(argc < 2) {
+        //No arguments
+        return PREPROQ_OK;
+    }
+
     for(int i =1; i < argc; i++) {
         if(CSTR_EQUAL(argv[i], "-h") || CSTR_EQUAL(argv[i], "--help")) {            
             return ARGS_HELP;
@@ -92,7 +97,7 @@ int main(int argc, const char** argv){
 
     Circuit circ;
 
-    ERROR_IF(qcir::parse(fp, circ, argv[1]) != PREPROQ_OK, "Parser exited with errors!");
+    ERROR_IF(qcir::parse(fp, circ, opt.target_file) != PREPROQ_OK, "Parser exited with errors!");
 
     fclose(fp);
    
